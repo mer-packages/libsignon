@@ -84,8 +84,16 @@ void TestPluginProxy::mechanisms_for_dummy()
 
 void TestPluginProxy::process_for_dummy()
 {
-    SessionData inData;
+    // Build up the session data.  It will include a value
+    // which is itself a QVariantMap in order to test the
+    // dbus argument expansion during marshalling.
+    QVariantMap providedTokens;
+    providedTokens.insert("AccessToken", "12345");
+    providedTokens.insert("RefreshToken", "abcde");
+    QVariantMap complexInData;
+    complexInData.insert("ProvidedTokens", providedTokens);
 
+    SessionData inData(complexInData);
     inData.setRealm("testRealm");
     inData.setUserName("testUsername");
 
@@ -124,6 +132,8 @@ void TestPluginProxy::process_for_dummy()
             outData["UserName"] == "testUsername");
     QVERIFY(outData.contains("Realm") &&
             outData["Realm"] == "testRealm_after_test");
+    QVERIFY(outData.contains("ProvidedTokens") &&
+            outData["ProvidedTokens"] == providedTokens);
 }
 
 void TestPluginProxy::processUi_for_dummy()

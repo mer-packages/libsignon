@@ -6,6 +6,7 @@ include($${TOP_SRC_DIR}/common-installs-config.pri)
 include($${TOP_SRC_DIR}/common-vars.pri)
 
 CONFIG += qt
+QT += dbus
 
 INCLUDEPATH += ../
 

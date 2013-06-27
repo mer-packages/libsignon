@@ -23,6 +23,7 @@
 
 #include "blobiohandler.h"
 
+#include <QDBusArgument>
 #include <QBuffer>
 #include <QDebug>
 
@@ -131,20 +132,60 @@ void BlobIOHandler::readBlob()
     }
 }
 
+QVariantMap expandDBusArgumentValue(const QVariant &value, bool *success)
+{
+    // first, convert the QDBusArgument to a map
+    QDBusArgument dbusValue = value.value<QDBusArgument>();
+    QVariantMap converted;
+    if (dbusValue.currentType() == QDBusArgument::MapType) {
+        //Assume that all maps are a{sv}
+        converted = qdbus_cast<QVariantMap>(dbusValue);
+    } else {
+        *success = false;
+        return QVariantMap();
+    }
+
+    // Then, check each value of the converted map
+    // and if any QDBusArgument is a value, convert that.
+    QVariantMap returnValue;
+    QVariantMap::const_iterator i;
+    for (i = converted.constBegin(); i != converted.constEnd(); ++i) {
+        if (qstrcmp(i.value().typeName(), "QDBusArgument") == 0) {
+            QVariantMap convertedValue = expandDBusArgumentValue(i.value(), success);
+            if (success == false) {
+                //bail out to prevent error in serialization
+                return QVariantMap();
+            }
+            returnValue.insert(i.key(), convertedValue);
+        } else {
+            returnValue.insert(i.key(), i.value());
+        }
+    }
+
+    return returnValue;
+}
+
 static QVariantMap filterOutComplexTypes(const QVariantMap &map)
 {
     QVariantMap filteredMap;
     QVariantMap::const_iterator i;
     for (i = map.constBegin(); i != map.constEnd(); i++) {
-        /* QDBusArgument are complex types; there is no QDataStream
-         * serialization for them, so keeping them in the map would make the
-         * serialization fail for the whole map.
-         * Therefore, skip them. */
         if (qstrcmp(i.value().typeName(), "QDBusArgument") == 0) {
-            BLAME() << "Found QDBusArgument in map; skipping.";
-            continue;
+            bool success = true;
+            QVariantMap convertedMap = expandDBusArgumentValue(i.value(), &success);
+            if (success == false) {
+                /* QDBusArgument are complex types; there is no QDataStream
+                 * serialization for them, so keeping them in the map would
+                 * make the serialization fail for the whole map, if we are
+                 * unable to convert to a QVariantMap.
+                 * Therefore, skip them. */
+                BLAME() << "Found non-map QDBusArgument in data; skipping.";
+                continue;
+            }
+            filteredMap.insert(i.key(), convertedMap);
+        } else {
+            filteredMap.insert(i.key(), i.value());
         }
-        filteredMap.insert(i.key(), i.value());
     }
     return filteredMap;
 }
