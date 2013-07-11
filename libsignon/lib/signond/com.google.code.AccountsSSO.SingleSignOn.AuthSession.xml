@@ -1,0 +1,101 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
+
+  <!--
+    com.google.code.AccountsSSO.SingleSignOn.AuthSession:
+    @short_description: An authentication session for an Identity.
+
+    The signond D-Bus APIs are unstable, subject to change and should not be
+    used by client applications, which should use libsignon-glib or
+    libsignon-qt instead.
+
+    Handle the client authentication process.
+  -->
+  <interface name="com.google.code.AccountsSSO.SingleSignOn.AuthSession">
+    <!--
+      stateChanged:
+      @short_description: Emitted when the authentication state changes.
+      @state: the current state of the AuthSession
+      @message: a message associated with the state change
+
+      Emitted when the current authentication state changed, such as when the
+      Ideneity was signed out.
+    -->
+    <signal name="stateChanged">
+      <arg name="state" type="i" direction="out"/>
+      <arg name="message" type="s" direction="out"/>
+    </signal>
+    <!--
+      unregistered:
+      @short_description: Emitted when the AuthSession is removed.
+
+      Emitted when the AuthSession is removed or destroyed, such as when using
+      objectUnref.
+    -->
+    <signal name="unregistered">
+    </signal>
+    <!--
+      queryAvailableMechanisms:
+      @short_description: List the available authentication mechanisms for this
+      AuthSession
+      @mechanisms: the available authentication mechanisms
+      @wantedMechanisms: the desired authentication mechanisms
+
+      Query the available authentication mechanisms for this AuthSession. The
+      result will be the intersection of the desired authentication mechanisms
+      and those that are supported by the AuthSession.
+    -->
+    <method name="queryAvailableMechanisms">
+      <arg name="mechanisms" type="as" direction="out"/>
+      <arg name="wantedMechanisms" type="as" direction="in"/>
+    </method>
+    <!--
+      process:
+      @short_description: Perform one step of the authentication process.
+      @sessionDataVa: the returned session data parameters
+      @sessionDataVa: additional session data parameters
+      @mechanism: the authentication mechanism to use
+
+      Using the available parameters in the Identity or @sessionDataVa, start
+      the authentication process by passing the parameters to the
+      authentication plugin.
+    -->
+    <method name="process">
+      <arg name="sessionData" type="a{sv}" direction="out"/>
+      <annotation name="com.trolltech.QtDBus.QtTypeName.Out0" value="QVariantMap"/>
+      <arg name="sessionDataVa" type="a{sv}" direction="in"/>
+      <annotation name="com.trolltech.QtDBus.QtTypeName.In0" value="QVariantMap"/>
+      <arg name="mechanism" type="s" direction="in"/>
+    </method>
+    <!--
+      cancel:
+      @short_description: Cancel the authentication session.
+
+      Cancel the current authentication session
+    -->
+    <method name="cancel">
+      <annotation name="org.freedesktop.DBus.Method.NoReply" value="true"/>
+    </method>
+    <!--
+      setId:
+      @short_description: Set the ID of the AuthSession.
+      @id: the ID to set
+
+      Set the ID of the AuthSession.
+    -->
+    <method name="setId">
+      <arg name="id" type="u" direction="in"/>
+      <annotation name="org.freedesktop.DBus.Method.NoReply" value="true"/>
+    </method>
+    <!--
+      objectUnref:
+      @short_description: Remove the AuthSession.
+
+      Forcibly remove the AuthSession.
+    -->
+    <method name="objectUnref">
+      <annotation name="org.freedesktop.DBus.Method.NoReply" value="true"/>
+      <annotation name="org.freedesktop.DBus.Deprecated" value="true"/>
+    </method>
+  </interface>
+</node>

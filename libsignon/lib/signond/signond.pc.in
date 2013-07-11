@@ -1,0 +1,9 @@
+prefix=$$INSTALL_PREFIX
+exec_prefix=${prefix}
+libdir=$$INSTALL_LIBDIR
+includedir=${prefix}/include
+
+Name: signond-dev
+Description: SignOn Framework client library development package 
+Version: $$PROJECT_VERSION
+Cflags: -I${includedir}/signond

@@ -1,0 +1,21 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+    <interface name="com.nokia.backupclient">
+    <method name="backupStarts">
+        <arg type="y" direction="out"/>
+    </method>
+
+    <method name="backupFinished">
+        <arg type="y" direction="out"/>
+    </method>
+
+    <method name="restoreStarts">
+        <arg type="y" direction="out"/>
+    </method>
+
+    <method name="restoreFinished">
+        <arg type="y" direction="out"/>
+    </method>
+
+    </interface>
+</node>
