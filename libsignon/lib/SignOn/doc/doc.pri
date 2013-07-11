@@ -58,7 +58,11 @@ include( ../../../common-installs-config.pri )
 #-----------------------------------------------------------------------------
 # Installation target setup for documentation
 #-----------------------------------------------------------------------------
-documentation.path = $${INSTALL_PREFIX}/share/doc/libsignon-qt
+greaterThan(QT_MAJOR_VERSION, 4) {
+    documentation.path = $${INSTALL_PREFIX}/share/doc/libsignon-qt5
+} else {
+    documentation.path = $${INSTALL_PREFIX}/share/doc/libsignon-qt
+}
 for( folder, DOC_FOLDERS ) {
     documentation.files += $${folder}
 }
