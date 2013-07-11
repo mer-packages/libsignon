@@ -1,0 +1,86 @@
+* Thu June 27 2013 Chris Adams <chris.adams@jollamobile.com> - 8.50
+- Convert QDBusArgument session parameters to QVariantMap
+
+* Thu May 02 2013 Carsten Munk <carsten.munk@jollamobile.com> - 8.50
+- Use %qmake5
+
+* Mon Apr 15 2013 Vesa Halttunen <vesa.halttunen@jollamobile.com> - 8.50
+- Update to version 8.50
+
+* Thu Mar 18 2013 Martin Kampas <martin.kampas@tieto.com> - 8.46
+- MER#683 - signon-8.46.tar.bz2 does not provide any automated tests
+- Add signon-8.46-install-tests.patch
+
+* Wed Feb 6 2013 Valerio Valerio <valerio.valerio@jollamobile.com> - 8.46
+- Update to version 8.46
+
+* Tue Jan 29 2013 Oleg Girko <ol+mer@infoserver.ru> - 8.43
+- Disable multilib for x86_64 architecture.
+
+* Thu Dec 20 2012 John Brooks <john.brooks@jollamobile.com> - 8.43
+- Merge libsignon-passwordplugin into libsignon package
+
+* Tue Oct 16 2012 Bernd Wachter <bernd.wachter@jollamobile.com> - 8.43
+- Update to latest upstream
+- Clean up package dependencies
+- Add 0001-include-QDebug-to-remotepluginprocess.patch (will be in 8.44)
+
+* Mon Jun 06 2011 Alberto Mardegan <alberto.mardegan@nokia.com> - 8.33
+- Update to latest upstream release
+  + Make dependency on MSSF optional
+  + libsignon-qt: do not make blocking D-Bus calls (BMC#18654)
+  + Move the SIm key authorizer out of the source tree
+  + Key authorizers are now dynamically loadable plugins
+
+* Mon May 02 2011 Alberto Mardegan <alberto.mardegan@nokia.com> - 8.16
+- Update to latest upstream release
+- Do not store encrypted passwords into the SSO DB (BMC#12429)
+- Fix SQL injection vulnerability (BMC#12424)
+- Use MSSF to encrypt D-Bus traffic (BMC#12430)
+- Check peer credentials on AuthSession methods (BMC#12427)
+- Ensure caller of setId() is authorized to use Identity (BMC#12570)
+- Enforce authentication method/mechanism restrictions (BMC#12425)
+- Use MSSF to encrypt signond<->plugin communication (BMC#12435)
+
+* Fri Feb 04 2011 Paolo Capriotti <paolo.capriotti@collabora.co.uk> - 7.2
+- Update to latest upstream version (fixes BMC#13264)
+
+* Thu Jan 27 2011 bart Cerneels <bart.cerneels@collabora.co.uk> - 6.6
+- Update to latest upstream version (fixes BMC#12974)
+
+* Mon Jan 03 2011 Paolo Capriotti <paolo.capriotti@collabora.co.uk> - 6.1
+- Update to latest upstream version (fixes BMC#11920)
+
+* Tue Nov 23 2010 Alberto Mardegan <alberto.mardegan@nokia.com> - 5.6
+- Fixes: BMC#10782 - Provide more recent version of signon
+- Update to latest upstream release (version 2.0 is now 4 months old)
+- Added named references into Identity API
+- Add configuration file for signond.
+- New libsignon-extentions library for signond plugins
+- Split the credentials DB into a metadata DB and a secrets DB
+
+* Tue Oct 05 2010 Bernd Wachter <ext-bernd.wachter@nokia.com> - 2.0
+- change qt-devel to pkgconfig(QtCore)
+- add dbus-1 dependency to fix generation of backupifadaptor.h
+
+* Thu Sep 23 2010 Bernd Wachter <ext-bernd.wachter@nokia.com> - 2.0
+- Change testrunner to testrunner-lite, fixing BMC#6964
+
+* Fri Aug 27 2010 Bernd Wachter <ext-bernd.wachter@nokia.com> - 2.0
+- Add static library required for linking plugins
+
+* Wed Aug 11 2010 Kaitlin Rupert <kaitlin.rupert@intel.com> - 2.0
+- mkspec files now install to /usr/share due to Qt beta2 update
+
+* Mon Aug 02 2010 Bernd Wachter <ext-bernd.wachter@nokia.com> - 2.0
+- Update to latest upstream version
+
+* Fri Jul 30 2010 Bernd Wachter <ext-bernd.wachter@nokia.com> - 1.9
+- Update to latest upstream version
+- Update to newer cryptsetup, remove cellular-qt dependency
+
+* Wed May 05 2010 Bernd Wachter <ext-bernd.wachter@nokia.com> - 0.1.16
+- Updated to latest harmattan version
+
+* Mon Apr 26 2010 Bernd Wachter - 0.1.14-1+0m6
+- Initial RPM release
