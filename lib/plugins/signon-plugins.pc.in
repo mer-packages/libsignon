@@ -1,0 +1,13 @@
+prefix=$$INSTALL_PREFIX
+exec_prefix=${prefix}
+libdir=$$INSTALL_LIBDIR
+includedir=${prefix}/include
+plugin_includedir=${includedir}/signon-plugins/SignOn
+plugindir=$$SIGNOND_PLUGINS_DIR
+Name: signon-plugins
+Description: SignonPlugins
+Version: $$PROJECT_VERSION
+Requires: $${LIBSIGNON}
+Libs.private: -L/usr/lib -l$${LIBQTCORE}
+Cflags:  -I${includedir}/signon-plugins -I${includedir}/signon-plugins/SignOn
+Libs: -lsignon-plugins

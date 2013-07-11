@@ -1,0 +1,143 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
+
+  <!--
+    com.google.code.AccountsSSO.SingleSignOn.Identity:
+    @short_description: Representation of a single identity.
+
+    The signond D-Bus APIs are unstable, subject to change and should not be
+    used by client applications, which should use libsignon-glib or
+    libsignon-qt instead.
+
+    A single credential stored in the Signon database.
+  -->
+  <interface name="com.google.code.AccountsSSO.SingleSignOn.Identity">
+    <!--
+      unregistered:
+      @short_description: Emitted when the identity is removed
+
+      Emitted when the Identity is removed from the Signon database.
+    -->
+    <signal name="unregistered">
+    </signal>
+    <!--
+      infoUpdated:
+      @short_description: Emitted when the Identity information has been
+      updated.
+      @type: the type of update that occurred
+
+      Emitted when credentials information has been updated is the Signon
+      database, such as when the credentials were updated or removed, or when
+      the identity was signed out.
+    -->
+    <signal name="infoUpdated">
+      <arg name="type" type="i" direction="out"/>
+    </signal>
+    <!--
+      requestCredentialsUpdate:
+      @short_description: Request that the user enters a new (updated) secret.
+      @id: the ID of the Identity
+      @message: message to be shown to the user
+
+      Request that the user enters a new secret, which is then stored in the
+      Signon database.
+    -->
+    <method name="requestCredentialsUpdate">
+      <arg name="id" type="u" direction="out"/>
+      <arg name="message" type="s" direction="in"/>
+    </method>
+    <!--
+      getInfo:
+      @short_description: Fetch additional information about the Identity.
+      @info: a dictionary of additional information
+
+      Fetch a large amount of additional information on the Identity, such as
+      the username, type, method and so on.
+    -->
+    <method name="getInfo">
+      <arg name="info" type="a{sv}" direction="out"/>
+    </method>
+    <!--
+      verifyUser:
+      @short_description: Verify the secret against a user-supplied secret.
+      @valid: whether the supplied secret is valid
+      @params: parameters to pass to the authentication plugin
+
+      Request that the user enters a secret, and verify that against the secret
+      stored in the Signon database.
+    -->
+    <method name="verifyUser">
+      <arg name="valid" type="b" direction="out"/>
+      <arg name="params" type="a{sv}" direction="in"/>
+      <annotation name="com.trolltech.QtDBus.QtTypeName.In4" value="QVariantMap"/>
+    </method>
+    <!--
+      verifySecret:
+      @short_description: Verify that the secret is valid.
+      @valid: whether the secret is valid
+      @secret: the secret to verify
+
+      Verifies that the supplied secret is valid by comparing it to the secret
+      stored in the Signon database.
+    -->
+    <method name="verifySecret">
+      <arg name="valid" type="b" direction="out"/>
+      <arg name="secret" type="s" direction="in"/>
+    </method>
+    <!--
+      remove:
+      @short_description: Remove the Identity.
+
+      Remove the identity from the Signon database.
+    -->
+    <method name="remove">
+    </method>
+    <!--
+      signOut:
+      @short_description: Sign out the identity.
+
+      Close all authentication sessions for the identity.
+    -->
+    <method name="signOut">
+      <arg type="b" direction="out"/>
+    </method>
+    <!--
+      store:
+      @short_description: Store credentials in the identity.
+      @id: a numeric ID for the identity in the database
+      @info: information to store in the Identity
+
+      Store the given credentials information in the identity, returning a
+      numeric ID for the identity in the Signon database.
+    -->
+    <method name="store">
+      <arg name="id" type="u" direction="out"/>
+      <arg name="info" type="a{sv}" direction="in"/>
+      <annotation name="com.trolltech.QtDBus.QtTypeName.In4" value="QVariantMap"/>
+    </method>
+    <!--
+      addReference:
+      @short_description: Add a reference to the Identity.
+      @id: the ID of the reference in the database
+      @reference: a named reference to add
+
+      Add a named reference to the Identity.
+    -->
+    <method name="addReference">
+      <arg name="id" type="i" direction="out"/>
+      <arg name="reference" type="s" direction="in"/>
+    </method>
+    <!--
+      removeReference:
+      @short_description: Remove a reference from the Identity.
+      @id: the ID of the reference in the database
+      @reference: a named reference to removed
+
+      Remove a named reference from the Identity.
+    -->
+    <method name="removeReference">
+      <arg name="id" type="i" direction="out"/>
+      <arg name="reference" type="s" direction="in"/>
+    </method>
+  </interface>
+</node>

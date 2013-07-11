@@ -1,0 +1,139 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
+
+  <!--
+    com.google.code.AccountsSSO.SingleSignOn.AuthService:
+    @short_description: Manages Signon identities.
+
+    The signond D-Bus APIs are unstable, subject to change and should not be
+    used by client applications, which should use libsignon-glib or
+    libsignon-qt instead.
+
+    Query information on available authentication methods and mechanisms, as
+    well as create identities and authentication sessions.
+  -->
+  <interface name="com.google.code.AccountsSSO.SingleSignOn.AuthService">
+    <!--
+      registerNewIdentity:
+      @short_description: Create a new Identity.
+      @objectPath: the D-Bus object path of the new Identity
+
+      Create a new (empty) Identity in the Signon database.
+    -->
+    <method name="registerNewIdentity">
+      <arg name="objectPath" type="o" direction="out"/>
+    </method>
+    <!--
+      getIdentity:
+      @short_description: Get an Identity from the Signon database.
+      @id: the ID of the Identity in the Signon database
+      @objectPath: the D-Bus object path for the Identity
+      @identityData: the information associated with the Identity
+
+      Get an Identity from the Signon database, creating it if it does not
+      exist.
+    -->
+    <method name="getIdentity">
+      <arg name="id" type="u" direction="in"/>
+      <arg name="objectPath" type="o" direction="out"/>
+      <arg name="identityData" type="a{sv}" direction="out"/>
+    </method>
+    <!--
+      getAuthSessionObjectPath:
+      @short_description: Get a D-Bus object path for an AuthSession.
+      @path: the D-Bus object path
+      @id: ID to use for the new AuthSession
+      @type: the authentication method to use for the new AuthSession
+
+      Return a D-Bus object path for a newly-created AuthSession.
+    -->
+    <method name="getAuthSessionObjectPath">
+      <!-- FIXME: Should be a 'o' typei for object paths. -->
+      <arg name="path" type="s" direction="out"/>
+      <arg name="id" type="u" direction="in"/>
+      <arg name="type" type="s" direction="in"/>
+    </method>
+    <!--
+      queryMethods:
+      @short_description: List the available authentication methods.
+      @methods: an array of the available authentication methods
+
+      Query the list of all available authentication methods.
+    -->
+    <method name="queryMethods">
+      <arg name="methods" type="as" direction="out"/>
+    <!--
+      queryMechanisms:
+      @short_description: List the available authentication mechanisms.
+      @mechanisms: an array of the available authentication mechanisms
+      @method: the authentication method for which to query the available mechanisms
+
+      Query the list of available authentication mechanisms for a given
+      authentication method.
+    -->
+    </method>
+    <method name="queryMechanisms">
+      <arg name="mechanisms" type="as" direction="out"/>
+      <arg name="method" type="s" direction="in"/>
+    </method>
+    <!--
+      queryIdentities:
+      @short_description: Request an array of stored identities.
+      @identites: the list of stored identities
+      @filter: the filter to apply to the returned identities
+
+      Request an array of identities which are stored in the Signon database.
+    -->
+    <method name="queryIdentities">
+      <arg name="identities" type="aa{sv}" direction="out"/>
+      <arg name="filter" type="a{sv}" direction="in"/>
+      <annotation name="com.trolltech.QtDBus.QtTypeName.In0" value="QVariantMap"/>
+    </method>
+    <!--
+      clear:
+      @short_description: Remove all identities from the Signon database.
+      @success: whether the clear succeeded
+
+      Clear the Signon database by removing all stored identities.
+    -->
+    <method name="clear">
+      <arg name="success" type="b" direction="out"/>
+    </method>
+    <!--
+      backupStarts:
+      @short_description: TODO
+
+      TODO
+    -->
+    <method name="backupStarts">
+      <arg type="y" direction="out"/>
+    </method>
+    <!--
+      backupFinished:
+      @short_description: TODO
+
+      TODO
+    -->
+    <method name="backupFinished">
+      <arg type="y" direction="out"/>
+    </method>
+    <!--
+      restoreStarts:
+      @short_description: TODO
+
+      TODO
+    -->
+    <method name="restoreStarts">
+      <arg type="y" direction="out"/>
+    </method>
+    <!--
+      restoreFinished:
+      @short_description: TODO
+
+      TODO
+    -->
+    <method name="restoreFinished">
+      <arg type="y" direction="out"/>
+    </method>
+  </interface>
+</node>

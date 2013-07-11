@@ -1,0 +1,31 @@
+/*! \mainpage SignOn plugin development
+
+@section intro Introduction
+
+This library contains the interface definition and a few classes that should be
+used when implementing an authentication plugin for the Single Sign On
+framework.
+
+
+@section usage Usage
+
+Since it currently consists of a few header files and of a single moc-generated
+.cpp file, the library is built statically.
+
+The library ships with a pkg-config file (@a signon-plugins.pc).
+
+
+@section classlist List of classes in libsignon-qt
+
+Here are the main classes in the libraries. You can also <a
+href="annotated.html">see the complete list of classes</a>. All classes but the
+AuthPluginInterface reside in the SignOn namespace.
+
+<table>
+  <tr><td>AuthPluginInterface</td><td>Interface to be implemented by all
+authentication plugins.</td></tr>
+  <tr><td>SignOn::UiSessionData</td><td>Dictionary of data to be exchanged
+between the plugin and the SignOn UI.</td></tr>
+</table>
+
+*/

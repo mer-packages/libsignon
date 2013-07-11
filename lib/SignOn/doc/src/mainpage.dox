@@ -1,0 +1,46 @@
+/*! \mainpage SignOn client library
+
+@section intro Introduction
+
+This library, libsignon-qt, is the Single Sign On client library for Qt-based
+applications. By using this library, an application can authenticate to a
+(usually remote) service using an existing set of credentials, and operate on
+the credentials database as well.
+
+
+@section terminology Terminology
+
+<p>A few terms are frequently used in this library APIs, which we'll briefly
+explain here:</p>
+
+<ul>
+  <li><b>Identity</b>: This is a local object representing a record in the
+credentials DB. It contains information about the username and password (the
+latter is write-only), plus some metadata such as a descriptive caption, ACL,
+reference count, and a little more. Identities are referred to in the SSO DB by
+numeric IDs.</li>
+  <li><b>Authentication method</b>: the SSO daemon supports different
+authentication methods, each being provided by a plugin. Well known examples of
+authentication methods include <a
+href="http://en.wikipedia.org/wiki/Simple_Authentication_and_Security_Layer">SASL</a>,
+<a href="http://en.wikipedia.org/wiki/Oauth">OAuth</a>. Authentication methods
+might support different authentication mechanisms.</li>
+  <li><b>Authentication session</b>: the process of performing the authentication.</li>
+</ul>
+
+
+@section classlist List of classes in libsignon-qt
+
+Here are the main classes in the libraries. You can also <a
+href="annotated.html">see the complete list of classes</a>. All classes reside
+in the SignOn namespace.
+
+<table>
+  <tr><td>SignOn::AuthSession</td><td>Local representation of an authentication
+session. Use this class to perform the authenticaion.</td></tr>
+  <tr><td>SignOn::Identity</td><td>Local representation of an identity. Use
+this class to load an existing set of credentials, or to create, edit, delete
+credentials.</td></tr>
+</table>
+
+*/

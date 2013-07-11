@@ -1,0 +1,11 @@
+prefix=$$INSTALL_PREFIX
+exec_prefix=${prefix}
+libdir=$$INSTALL_LIBDIR
+includedir=${prefix}/include
+
+Name: libsignon-qt5
+Description: Client library for the Single Sign On daemon, Qt5 bindings.
+Version: $$PROJECT_VERSION
+Libs: -L${libdir} -lsignon-qt5
+Requires: Qt5Core
+Cflags: -I${includedir}/signon-qt5 -I${includedir}/signon-qt5/SignOn

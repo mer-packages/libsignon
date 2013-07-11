@@ -1,0 +1,20 @@
+Building signond can be done by typing these commands:
+
+  qmake [options]
+  make
+  make install
+
+Note that the "make install" command will probably require root permission in
+order to install the files into the root filesystem.
+
+The options recognized by the qmake command are:
+
+  PREFIX=<install prefix>           (default is "/usr")
+  LIBDIR=<library install prefix>   (default is "$PREFIX/lib" on 32bit machines and
+                                     "$PREFIX/lib64" on 64bit machines)
+  CONFIG+=coverage                  (enable test coverage reporting)
+  CONFIG+=cryptsetup                (enable building the cryptsetup extension)
+
+Example:
+  qmake PREFIX=~ CONFIG+=cryptsetup
+
