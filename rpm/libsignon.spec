@@ -19,12 +19,6 @@ Obsoletes: libsignon-passwordplugin < %{version}-%{release}
 Provides: libsignon = %{version}-%{release}
 Obsoletes: libsignon < %{version}-%{release}
 
-Patch0: %{name}-%{version}-install-tests.patch
-Patch1: 0001-libsignon-disable-multilib.patch
-Patch2: 0002-libsignon-c++0x.patch
-Patch3: 0003-libsignon-documentation-path.patch
-Patch4: 0004-Convert-QDBusArgument-session-parameters-to-QVariant.patch
-
 %description
 %{summary}.
 
@@ -167,12 +161,7 @@ This package contains tests for signon
 
 
 %prep
-%setup -n %{name}-%{version}
-%patch0 -p1
-%patch1 -p1
-%patch2 -p1
-%patch3 -p1
-%patch4 -p1
+%setup -n %{name}-%{version}/libsignon
 
 chmod +x tests/create-tests-definition.sh
 
