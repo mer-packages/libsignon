@@ -5,7 +5,7 @@ Summary: Single Sign On Qt5 library
 Group: System/Libraries
 License: LGPLv2.1
 URL: https://code.google.com/p/accounts-sso.signond/
-Source: %{name}-%{version}.tar.bz2
+Source0: %{name}-%{version}.tar.bz2
 BuildRequires: doxygen
 BuildRequires: pkgconfig(Qt5Core)
 BuildRequires: pkgconfig(Qt5DBus)
