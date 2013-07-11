@@ -17,10 +17,10 @@ QMAKE_CXXFLAGS -= -Werror -Wno-write-strings
 QMAKE_CXXFLAGS += -fno-exceptions -fno-rtti
 
 greaterThan(QT_MAJOR_VERSION, 4) {
-    # Qt5: use C++11. This is used to avoid the source incompatibility
+    # Qt5: use C++0x. This is used to avoid the source incompatibility
     # with the QSKIP macro, as described in:
     # http://www.kdab.com/porting-from-qt-4-to-qt-5/
-    QMAKE_CXXFLAGS += -std=c++11
+    QMAKE_CXXFLAGS += -std=c++0x
 }
 
 TOP_SRC_DIR     = $$PWD
