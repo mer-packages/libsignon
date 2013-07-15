@@ -151,17 +151,17 @@ This package contains tests for signon
 
 
 %prep
-%setup -n %{name}-%{version}/libsignon
+%setup -q -n %{name}-%{version}/libsignon
 
 chmod +x tests/create-tests-definition.sh
 
 %build
 %qmake5 TESTDIR=/opt/tests/signon CONFIG+=install_tests
-make
+make %{?jobs:-j%jobs}
 
 
 %install
-make INSTALL_ROOT=%{buildroot} install
+%qmake5_install
 rm -f %{buildroot}/%{_docdir}/libsignon-qt/html/installdox
 rm -f %{buildroot}/%{_docdir}/signon/html/installdox
 rm -f %{buildroot}/%{_docdir}/signon-plugins/html/installdox

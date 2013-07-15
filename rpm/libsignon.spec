@@ -79,17 +79,17 @@ Obsoletes: libsignon-doc < %{version}-%{release}
 %{_docdir}/libsignon-qt/*
 
 %prep
-%setup -n %{name}-%{version}/libsignon
+%setup -q -n %{name}-%{version}/libsignon
 
 chmod +x tests/create-tests-definition.sh
 
 %build
-qmake %{name}.pro TESTDIR=/opt/tests/%{name} CONFIG+=install_tests
-make
+%qmake TESTDIR=/opt/tests/signon CONFIG+=install_tests
+make %{?jobs:-j%jobs}
 
 
 %install
-make INSTALL_ROOT=%{buildroot} install
+%qmake_install
 rm -f %{buildroot}/%{_docdir}/libsignon-qt/html/installdox
 rm -f %{buildroot}/%{_docdir}/signon/html/installdox
 rm -f %{buildroot}/%{_docdir}/signon-plugins/html/installdox
