@@ -18,6 +18,7 @@ BuildRequires: pkgconfig(libcryptsetup)
 BuildRequires: pkgconfig(accounts-qt5)
 BuildRequires: pkgconfig(libproxy-1.0)
 BuildRequires: fdupes
+Obsoletes: signon
 
 %description
 %{summary}.
@@ -50,6 +51,7 @@ Requires: %{name} = %{version}-%{release}
 Summary: Single Sign On test plugins
 Group: System/Libraries
 Requires: %{name} = %{version}-%{release}
+Obsoletes: signon-testplugin
 
 %description testplugin
 %{summary}
@@ -63,6 +65,7 @@ Requires: %{name} = %{version}-%{release}
 Summary: Single Sign On example client
 Group: System/Libraries
 Requires: %{name} = %{version}-%{release}
+Obsoletes: signon-exampleplugin
 
 %description exampleplugin
 %{summary}
@@ -76,6 +79,7 @@ Requires: %{name} = %{version}-%{release}
 Summary: Development files for signon
 Group: Development/Libraries
 Requires: %{name} = %{version}-%{release}
+Obsoletes: signon-devel
 
 %description devel
 %{summary}
@@ -114,6 +118,7 @@ Requires: libsignon-qt5 = %{version}-%{release}
 %package doc
 Summary: Documentation for signon
 Group: Documentation
+Obsoletes: signon-doc
 
 %description doc
 Doxygen-generated HTML documentation for the signon.
@@ -141,6 +146,7 @@ Doxygen-generated HTML documentation for the signon-qt
 Summary: Tests for signon
 Group: System/X11
 Requires: %{name} = %{version}-%{release}
+Obsoletes: signon-tests
 
 %description tests
 This package contains tests for signon
