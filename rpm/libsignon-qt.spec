@@ -49,6 +49,10 @@ Obsoletes: libsignon < %{version}-%{release}
 %exclude %{_docdir}/signon-plugins/*
 %exclude /opt/tests/signon
 
+# these are really not a good idea...
+%exclude %{_libdir}/debug/*
+%exclude %{_libdir}/debug/.build-id/*
+
 %package devel
 Summary: Development files for libsignon-qt
 Group: Development/Libraries
