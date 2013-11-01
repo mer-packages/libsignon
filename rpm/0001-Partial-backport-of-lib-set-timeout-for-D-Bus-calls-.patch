@@ -1,0 +1,40 @@
+From af9c517536a7cd51affd6d22332d90864dff51f2 Mon Sep 17 00:00:00 2001
+From: Alberto Mardegan <alberto.mardegan@canonical.com>
+Date: Fri, 6 Sep 2013 09:33:01 +0300
+Subject: [PATCH] Partial backport of lib: set timeout for D-Bus calls to
+ INT_MAX
+
+QDBusAbstractInterface uses the default D-Bus timeout (about 30 seconds)
+unless instructed otherwise. But when UI-interactions are involved, the
+authentication process can last longer than that.
+This commit sets the timeout to INT_MAX.
+
+Fixes: https://bugs.launchpad.net/bugs/1220823
+---
+ lib/SignOn/dbusinterface.cpp |    3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/lib/SignOn/dbusinterface.cpp b/lib/SignOn/dbusinterface.cpp
+index 4c63fb6..b580bed 100644
+--- a/lib/SignOn/dbusinterface.cpp
++++ b/lib/SignOn/dbusinterface.cpp
+@@ -22,6 +22,8 @@
+ 
+ #include "dbusinterface.h"
+ 
++#include <climits>
++
+ using namespace SignOn;
+ 
+ DBusInterface::DBusInterface(const QString &service,
+@@ -31,6 +33,7 @@ DBusInterface::DBusInterface(const QString &service,
+                              QObject *parent):
+     QDBusAbstractInterface(service, path, interface, connection, parent)
+ {
++    setTimeout(INT_MAX);
+ }
+ 
+ DBusInterface::~DBusInterface()
+-- 
+1.7.9.5
+

@@ -6,6 +6,7 @@ Group: System/Libraries
 License: LGPLv2.1
 URL: https://code.google.com/p/accounts-sso.signond/
 Source0: %{name}-%{version}.tar.bz2
+Patch0: 0001-Partial-backport-of-lib-set-timeout-for-D-Bus-calls-.patch
 BuildRequires: doxygen
 BuildRequires: pkgconfig(Qt5Core)
 BuildRequires: pkgconfig(Qt5DBus)
@@ -158,6 +159,8 @@ This package contains tests for signon
 
 %prep
 %setup -q -n %{name}-%{version}/libsignon
+
+%patch0 -p1
 
 chmod +x tests/create-tests-definition.sh
 
