@@ -436,6 +436,10 @@ void PluginProxy::handlePluginResponse(const quint32 resultOperation,
     }
 
     connect(m_process, SIGNAL(readyRead()), this, SLOT(onReadStandardOutput()));
+    if (m_process->bytesAvailable()) {
+        TRACE() << "plugin has more to read after handling a response";
+        onReadStandardOutput();
+    }
 }
 
 void PluginProxy::onReadStandardError()
