@@ -22,6 +22,8 @@
 
 #include "dbusinterface.h"
 
+#include <climits>
+
 using namespace SignOn;
 
 DBusInterface::DBusInterface(const QString &service,
@@ -31,6 +33,7 @@ DBusInterface::DBusInterface(const QString &service,
                              QObject *parent):
     QDBusAbstractInterface(service, path, interface, connection, parent)
 {
+    setTimeout(INT_MAX);
 }
 
 DBusInterface::~DBusInterface()
