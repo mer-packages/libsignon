@@ -89,7 +89,7 @@ chmod +x tests/create-tests-definition.sh
 
 %build
 %qmake TESTDIR=/opt/tests/signon CONFIG+=install_tests
-make %{?jobs:-j%jobs}
+make %{?_smp_mflags}
 
 
 %install
