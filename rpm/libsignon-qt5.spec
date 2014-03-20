@@ -18,10 +18,6 @@ BuildRequires: pkgconfig(libcryptsetup)
 BuildRequires: pkgconfig(accounts-qt5)
 BuildRequires: pkgconfig(libproxy-1.0)
 BuildRequires: fdupes
-BuildRequires: oneshot
-Requires: mapplauncherd-qt5
-Requires: oneshot
-%{_oneshot_requires_post}
 Obsoletes: signon
 
 %description
@@ -35,7 +31,6 @@ Obsoletes: signon
 %{_datadir}/dbus-1/services/*
 %config %{_sysconfdir}/signond.conf
 %{_libdir}/signon/libpasswordplugin.so
-%{_oneshotdir}/signon-storage-perm
 
 %package -n libsignon-qt5
 Summary: Single Sign On Qt library
@@ -179,11 +174,6 @@ rm -f %{buildroot}/%{_docdir}/signon-plugins/html/installdox
 rm -f %{buildroot}/%{_docdir}/saslplugin/html/installdox
 %fdupes %{buildroot}/%{_docdir}
 
-mkdir -p %{buildroot}/%{_oneshotdir}
-install -D -m 755 oneshot/signon-storage-perm %{buildroot}/%{_oneshotdir}
 
-%post
-/sbin/ldconfig
-%{_bindir}/add-oneshot signon-storage-perm
-
+%post -p /sbin/ldconfig
 %postun -p /sbin/ldconfig
