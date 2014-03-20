@@ -1,6 +1,11 @@
 #!/bin/sh
 
-storage_dir=/home/nemo/.config/signond
+DEF_UID=$(grep "^UID_MIN" /etc/login.defs |  tr -s " " | cut -d " " -f2)
+DEVICEUSER=$(getent passwd $DEF_UID | sed 's/:.*//')
+if [ ! -d "/home/$DEVICEUSER/.config" ]; then
+    exit 1
+fi
+storage_dir="/home/$DEVICEUSER/.config/signond"
 mkdir -p $storage_dir
 chown privileged $storage_dir
 chgrp privileged $storage_dir
