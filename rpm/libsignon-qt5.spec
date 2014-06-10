@@ -151,6 +151,7 @@ Doxygen-generated HTML documentation for the signon-qt
 Summary: Tests for signon
 Group: System/X11
 Requires: %{name} = %{version}-%{release}
+Requires: %{name}-testplugin = %{version}-%{release}
 Obsoletes: signon-tests
 
 %description tests
