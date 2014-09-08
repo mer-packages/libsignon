@@ -101,6 +101,7 @@ DBusOperationQueueHandler::DBusOperationQueueHandler(QObject *clientObject):
 
 DBusOperationQueueHandler::~DBusOperationQueueHandler()
 {
+    clearOperationsQueue();
 }
 
 void DBusOperationQueueHandler::enqueueOperation(Operation *operation)
@@ -124,6 +125,7 @@ void DBusOperationQueueHandler::execQueuedOperations()
         if (op->m_args.size() > m_maxNumberOfOperationParameters) {
             qWarning() << "DBusOperationQueueHandler::execQueuedOperations(): "
                           "Maximum number of operation parameters exceeded(6).";
+            delete op;
             continue;
         }
 
@@ -185,6 +187,7 @@ void DBusOperationQueueHandler::removeOperation(const char *name, bool removeAll
     foreach (Operation *operation, m_operationsQueue) {
         if (operation != NULL && qstrcmp(operation->m_name, name) == 0) {
             m_operationsQueue.removeOne(operation);
+            delete operation;
             if (!removeAll)
                 break;
         }
@@ -198,6 +201,12 @@ bool DBusOperationQueueHandler::queueContainsOperation(const char *name)
             return true;
 
     return false;
+}
+
+void DBusOperationQueueHandler::clearOperationsQueue()
+{
+    qDeleteAll(m_operationsQueue);
+    m_operationsQueue.clear();
 }
 
 } //SignOn

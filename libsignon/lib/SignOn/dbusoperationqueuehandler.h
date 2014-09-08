@@ -66,7 +66,7 @@ public:
 
     void execQueuedOperations();
     int queuedOperationsCount() const { return m_operationsQueue.count(); }
-    void clearOperationsQueue() { m_operationsQueue.clear(); }
+    void clearOperationsQueue();
 
     void removeOperation(const char *name, bool removeAll = true);
 
