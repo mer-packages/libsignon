@@ -17,6 +17,7 @@ BuildRequires: pkgconfig(dbus-1)
 BuildRequires: pkgconfig(libcryptsetup)
 BuildRequires: pkgconfig(accounts-qt5)
 BuildRequires: pkgconfig(libproxy-1.0)
+BuildRequires: pkgconfig(qt5-boostable)
 BuildRequires: fdupes
 BuildRequires: oneshot
 Requires: mapplauncherd-qt5

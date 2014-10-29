@@ -8,6 +8,13 @@ QT += core \
     network \
     dbus
 
+packagesExist(qt5-boostable) {
+    DEFINES += HAS_BOOSTER
+    PKGCONFIG += qt5-boostable
+} else {
+    warning("qt5-boostable not available; startup times will be slower")
+}
+
 #generate adaptor for backup
 system(qdbusxml2cpp -c BackupIfAdaptor -a backupifadaptor.h:backupifadaptor.cpp \
     ../../lib/signond/com.nokia.SingleSignOn.Backup.xml)

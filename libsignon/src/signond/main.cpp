@@ -38,7 +38,7 @@ void installSigHandlers()
     sigaction(SIGINT, &act, 0);
 }
 
-int main(int argc, char *argv[])
+Q_DECL_EXPORT int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     installSigHandlers();
