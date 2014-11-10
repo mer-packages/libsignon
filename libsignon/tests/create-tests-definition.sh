@@ -71,6 +71,12 @@ generate_test_set()
           # Redirecting output to file prevents receiving SIGHUP which leads to
           # server restart and causes certain test cases to fail.
           signond 1>/tmp/tests-libsignond-signond.out 2>&amp;1 &amp;
+`test_flag "${FLAGS}" "stop-ui" && echo "
+          # Any signon UI must be stopped prior to executing this test set
+          systemctl --user list-unit-files \\\\
+            |awk '\\\$1 ~ /-signon-ui.service$/ { print \\\$1 }' \\\\
+            |xargs systemctl --user stop
+"`
 
           sleep 2
         </step>
@@ -102,7 +108,7 @@ cat <<END
     <description>Signon Qt Client Library Tests</description>
 
 `generate_test_set libsignon-qt-tests/libsignon-qt-tests \
-    "SSO API" "Functional" "Component" "single-case"`
+    "SSO API" "Functional" "Component" "single-case,stop-ui"`
 
 `${HAVE_AEGIS} || echo "    <!-- AEGIS not available on this platform"`
 `generate_test_set libsignon-qt-tests/libsignon-qt-untrusted-tests \
