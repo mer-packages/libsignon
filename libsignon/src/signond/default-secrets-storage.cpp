@@ -272,7 +272,8 @@ bool SecretsDB::removeData(quint32 id, quint32 method)
 }
 
 DefaultSecretsStorage::DefaultSecretsStorage(QObject *parent):
-    AbstractSecretsStorage(parent)
+    AbstractSecretsStorage(parent),
+    m_secretsDB(0)
 {
 }
 
@@ -288,7 +289,8 @@ bool DefaultSecretsStorage::initialize(const QVariantMap &configuration)
         close();
     }
 
-    QString name = configuration.value(QLatin1String("name")).toString();
+    QString name; // force deep copy / detach
+    name.append(configuration.value(QLatin1String("name")).toString());
 
     m_secretsDB = new SecretsDB(name);
     if (!m_secretsDB->init()) {
@@ -298,6 +300,7 @@ bool DefaultSecretsStorage::initialize(const QVariantMap &configuration)
         return false;
     }
 
+    m_secretsDBConnectionName.append(m_secretsDB->connectionName());
     setIsOpen(true);
     return true;
 }
@@ -305,9 +308,8 @@ bool DefaultSecretsStorage::initialize(const QVariantMap &configuration)
 bool DefaultSecretsStorage::close()
 {
     if (m_secretsDB != 0) {
-        QString connectionName = m_secretsDB->connectionName();
         delete m_secretsDB;
-        QSqlDatabase::removeDatabase(connectionName);
+        QSqlDatabase::removeDatabase(m_secretsDBConnectionName);
         m_secretsDB = 0;
     }
     return AbstractSecretsStorage::close();
