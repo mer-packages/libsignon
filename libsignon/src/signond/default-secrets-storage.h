@@ -95,6 +95,7 @@ public:
 
 private:
     SecretsDB *m_secretsDB;
+    QString m_secretsDBConnectionName;
 };
 
 } //namespace
