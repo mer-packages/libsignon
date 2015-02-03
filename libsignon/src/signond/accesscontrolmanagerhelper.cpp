@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
  * Copyright (C) 2011 Intel Corporation.
+ * Copyright (C) 2013 Canonical Ltd.
  *
  * Contact: Aurel Popirtac <ext-aurel.popirtac@nokia.com>
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
@@ -27,6 +28,9 @@
 #include <QBuffer>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
+#ifdef ENABLE_P2P
+#include <dbus/dbus.h>
+#endif
 
 #include "accesscontrolmanagerhelper.h"
 #include "signond-common.h"
@@ -60,10 +64,10 @@ AccessControlManagerHelper::~AccessControlManagerHelper()
 }
 
 
-bool
-AccessControlManagerHelper::isPeerAllowedToUseIdentity(
-                                               const QDBusMessage &peerMessage,
-                                               const quint32 identityId)
+bool AccessControlManagerHelper::isPeerAllowedToUseIdentity(
+                                       const QDBusConnection &peerConnection,
+                                       const QDBusMessage &peerMessage,
+                                       const quint32 identityId)
 {
     // TODO - improve this, the error handling and more precise behaviour
 
@@ -83,16 +87,25 @@ AccessControlManagerHelper::isPeerAllowedToUseIdentity(
     if (db->errorOccurred())
         return false;
 
-    if (acl.isEmpty())
+    IdentityOwnership ownership =
+        isPeerOwnerOfIdentity(peerConnection, peerMessage, identityId);
+    if (ownership == ApplicationIsOwner || ownership == IdentityDoesNotHaveOwner)
         return true;
 
-    return peerHasOneOfAccesses(peerMessage, acl);
+    if (acl.isEmpty())
+        return false;
+
+    if (acl.contains(QLatin1String("*")))
+        return true;
+
+    return peerHasOneOfAccesses(peerConnection, peerMessage, acl);
 }
 
 AccessControlManagerHelper::IdentityOwnership
 AccessControlManagerHelper::isPeerOwnerOfIdentity(
-                                               const QDBusMessage &peerMessage,
-                                               const quint32 identityId)
+                                       const QDBusConnection &peerConnection,
+                                       const QDBusMessage &peerMessage,
+                                       const quint32 identityId)
 {
     CredentialsDB *db = CredentialsAccessManager::instance()->credentialsDB();
     if (db == 0) {
@@ -107,32 +120,38 @@ AccessControlManagerHelper::isPeerOwnerOfIdentity(
     if (ownerSecContexts.isEmpty())
         return IdentityDoesNotHaveOwner;
 
-    return peerHasOneOfAccesses(peerMessage, ownerSecContexts) ?
+    return peerHasOneOfAccesses(peerConnection, peerMessage, ownerSecContexts) ?
         ApplicationIsOwner : ApplicationIsNotOwner;
 }
 
 bool
-AccessControlManagerHelper::isPeerKeychainWidget(const QDBusMessage &peerMessage)
+AccessControlManagerHelper::isPeerKeychainWidget(
+                                       const QDBusConnection &peerConnection,
+                                       const QDBusMessage &peerMessage)
 {
     static QString keychainWidgetAppId = m_acManager->keychainWidgetAppId();
-    QString peerAppId = m_acManager->appIdOfPeer(peerMessage);
+    QString peerAppId = appIdOfPeer(peerConnection, peerMessage);
     return (peerAppId == keychainWidgetAppId);
 }
 
-QString AccessControlManagerHelper::appIdOfPeer(const QDBusMessage &peerMessage)
+QString AccessControlManagerHelper::appIdOfPeer(
+                                       const QDBusConnection &peerConnection,
+                                       const QDBusMessage &peerMessage)
 {
-    TRACE() << m_acManager->appIdOfPeer(peerMessage);
-    return m_acManager->appIdOfPeer(peerMessage);
+    TRACE() << m_acManager->appIdOfPeer(peerConnection, peerMessage);
+    return m_acManager->appIdOfPeer(peerConnection, peerMessage);
 }
 
 bool
-AccessControlManagerHelper::peerHasOneOfAccesses(const QDBusMessage &peerMessage,
-                                                 const QStringList secContexts)
+AccessControlManagerHelper::peerHasOneOfAccesses(
+                                       const QDBusConnection &peerConnection,
+                                       const QDBusMessage &peerMessage,
+                                       const QStringList secContexts)
 {
     foreach(QString securityContext, secContexts)
     {
         TRACE() << securityContext;
-        if (m_acManager->isPeerAllowedToAccess(peerMessage, securityContext))
+        if (isPeerAllowedToAccess(peerConnection, peerMessage, securityContext))
             return true;
     }
 
@@ -142,16 +161,54 @@ AccessControlManagerHelper::peerHasOneOfAccesses(const QDBusMessage &peerMessage
 
 bool
 AccessControlManagerHelper::isPeerAllowedToAccess(
-                                               const QDBusMessage &peerMessage,
-                                               const QString securityContext)
+                                       const QDBusConnection &peerConnection,
+                                       const QDBusMessage &peerMessage,
+                                       const QString securityContext)
 {
     TRACE() << securityContext;
-    return m_acManager->isPeerAllowedToAccess(peerMessage, securityContext);
+    return m_acManager->isPeerAllowedToAccess(peerConnection, peerMessage,
+                                              securityContext);
 }
 
 pid_t AccessControlManagerHelper::pidOfPeer(const QDBusContext &peerContext)
 {
-    QString service = peerContext.message().service();
-    return peerContext.connection().interface()->servicePid(service).value();
+    return pidOfPeer(peerContext.connection(), peerContext.message());
 }
 
+pid_t AccessControlManagerHelper::pidOfPeer(
+                                       const QDBusConnection &peerConnection,
+                                       const QDBusMessage &peerMessage)
+{
+    QString service = peerMessage.service();
+    if (service.isEmpty()) {
+#ifdef ENABLE_P2P
+        DBusConnection *connection =
+            (DBusConnection *)peerConnection.internalPointer();
+        unsigned long pid = 0;
+        dbus_bool_t ok = dbus_connection_get_unix_process_id(connection,
+                                                             &pid);
+        if (Q_UNLIKELY(!ok)) {
+            BLAME() << "Couldn't get PID of caller!";
+            return 0;
+        }
+        return pid;
+#else
+        BLAME() << "Empty caller name, and no P2P support enabled";
+        return 0;
+#endif
+    } else {
+        return peerConnection.interface()->servicePid(service).value();
+    }
+}
+
+SignOn::AccessReply *
+AccessControlManagerHelper::requestAccessToIdentity(
+                                       const QDBusConnection &peerConnection,
+                                       const QDBusMessage &peerMessage,
+                                       quint32 id)
+{
+    SignOn::AccessRequest request;
+    request.setPeer(peerConnection, peerMessage);
+    request.setIdentity(id);
+    return m_acManager->handleRequest(request);
+}

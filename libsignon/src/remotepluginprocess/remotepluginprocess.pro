@@ -32,9 +32,12 @@ system(pkg-config --exists libproxy-1.0) {
 }
 
 QMAKE_LIBDIR += \
-    $${TOP_BUILD_DIR}/lib/plugins/signon-plugins-common
+    $${TOP_BUILD_DIR}/lib/plugins/signon-plugins-common \
+    $${TOP_BUILD_DIR}/lib/plugins
 
-LIBS += -lsignon-plugins-common
+LIBS += \
+    -lsignon-plugins-common \
+    -lsignon-plugins
 
 QMAKE_CXXFLAGS += -fno-exceptions \
                   -fno-rtti

@@ -33,6 +33,7 @@ Obsoletes: signon
 %{_bindir}/*
 %{_libdir}/libsignon-extension.so.*
 %{_libdir}/libsignon-plugins-common.so.*
+%{_libdir}/libsignon-plugins.so.*
 %{_datadir}/dbus-1/services/*
 %config %{_sysconfdir}/signond.conf
 %{_libdir}/signon/libpasswordplugin.so
@@ -97,11 +98,13 @@ Obsoletes: signon-devel
 %{_includedir}/signon-plugins/*
 %{_libdir}/libsignon-extension.so
 %{_libdir}/libsignon-plugins-common.so
-%{_libdir}/libsignon-plugins.a
+%{_libdir}/libsignon-plugins.so
 %{_libdir}/pkgconfig/signond.pc
 %{_libdir}/pkgconfig/signon-plugins.pc
 %{_libdir}/pkgconfig/signon-plugins-common.pc
 %{_libdir}/pkgconfig/SignOnExtension.pc
+%{_libdir}/cmake/SignOnQt5/SignOnQt5Config.cmake
+%{_libdir}/cmake/SignOnQt5/SignOnQt5ConfigVersion.cmake
 %{_datadir}/dbus-1/interfaces/*
 
 

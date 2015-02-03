@@ -2,7 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
- * Copyright (C) 2012 Canonical Ltd.
+ * Copyright (C) 2012-2013 Canonical Ltd.
  *
  * Contact: Aurel Popirtac <ext-aurel.popirtac@nokia.com>
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
@@ -40,6 +40,8 @@
 
 namespace SignonDaemonNS {
 
+class PendingCallWatcherWithContext;
+
 /*!
  * @class SignonIdentity
  * Daemon side representation of identity.
@@ -49,6 +51,7 @@ class SignonIdentity: public SignonDisposable, protected QDBusContext
 {
     Q_OBJECT
 
+    friend class PendingCallWatcherWithContext;
     friend class SignonIdentityAdaptor;
 
     virtual ~SignonIdentity();
@@ -77,21 +80,23 @@ Q_SIGNALS:
     void unregistered();
     //TODO - split this into the 3 separate signals(updated, removed, signed out)
     void infoUpdated(int);
+    void stored(SignonIdentity *identity);
+
+private Q_SLOTS:
+    void removeCompleted(QDBusPendingCallWatcher *call);
+    void signOutCompleted(QDBusPendingCallWatcher *call);
+    void onCredentialsUpdated(quint32 id);
 
 private:
     SignonIdentity(quint32 id, int timeout, SignonDaemon *parent);
-    bool init();
-    bool credentialsStored() const { return m_id > 0 ? true : false; }
-    void queryUserPassword(const QVariantMap &params);
+    void queryUserPassword(const QVariantMap &params,
+                           const QDBusConnection &connection,
+                           const QDBusMessage &message);
 
 private:
     quint32 m_id;
     SignonUiAdaptor *m_signonui;
     SignonIdentityInfo *m_pInfo;
-    SignonDaemon *m_pSignonDaemon;
-    bool m_registered;
-    QDBusMessage m_message;
-
 }; //class SignonDaemon
 
 } //namespace SignonDaemonNS

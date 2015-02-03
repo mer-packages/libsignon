@@ -54,6 +54,7 @@
  * */
 #define SIGNOND_SERVICE_PREFIX     "com.google.code.AccountsSSO.SingleSignOn"
 #define SIGNOND_SERVICE            SIGNOND_STRING(SIGNOND_SERVICE_PREFIX)
+#define SIGNOND_SOCKET_FILENAME    "signond/socket" /* in XDG_RUNTIME_DIR */
 
 #define SIGNOND_DAEMON_OBJECTPATH \
     SIGNOND_STRING("/com/google/code/AccountsSSO/SingleSignOn")

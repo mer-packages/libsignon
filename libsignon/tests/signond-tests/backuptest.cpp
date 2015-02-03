@@ -154,6 +154,4 @@ void TestBackup::restoreNormalTest()
 
 }
 
-#if !defined(SSO_CI_TESTMANAGEMENT)
 QTEST_MAIN(TestBackup)
-#endif

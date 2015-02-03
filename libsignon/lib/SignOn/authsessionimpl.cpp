@@ -2,6 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
+ * Copyright (C) 2013 Canonical Ltd.
  *
  * Contact: Aurel Popirtac <ext-aurel.popirtac@nokia.com>
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
@@ -25,21 +26,8 @@
 #include "authsessionimpl.h"
 #include "libsignoncommon.h"
 
-
-#define SIGNOND_AUTHSESSION_CONNECTION_PROBLEM \
-    QLatin1String("Cannot create remote AuthSession object: " \
-                  "check the signon daemon and authentication plugin.")
-
-#define SIGNOND_SESSION_PROCESS_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("process(const SessionData &, const QString &)")
-#define SIGNOND_SESSION_SET_ID_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("setId(quint32)")
-#define SIGNOND_SESSION_QUERY_AVAILABLE_MECHANISMS_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("queryAvailableMechanisms(const QStringList &)")
-
-#ifndef SIGNOND_NEW_IDENTITY
-    #define SIGNOND_NEW_IDENTITY 0
-#endif
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
 
 using namespace SignOn;
 
@@ -60,144 +48,71 @@ AuthSessionImpl::AuthSessionImpl(AuthSession *parent,
                                  const QString &methodName):
     QObject(parent),
     m_parent(parent),
-    m_operationQueueHandler(this),
-    m_methodName(methodName)
+    m_dbusProxy(SIGNOND_AUTH_SESSION_INTERFACE_C,
+                this),
+    m_methodName(methodName),
+    m_processCall(0)
 {
+    m_dbusProxy.connect("stateChanged", this,
+                        SLOT(stateSlot(int, const QString&)));
+    m_dbusProxy.connect("unregistered", this,
+                        SLOT(unregisteredSlot()));
+    QObject::connect(&m_dbusProxy, SIGNAL(objectPathNeeded()),
+                     this, SLOT(initInterface()));
+
     m_id = id;
-    m_DBusInterface = 0;
-    m_isValid = true;
     m_isAuthInProcessing = false;
-    m_isBusy = false;
 
     initInterface();
 }
 
 AuthSessionImpl::~AuthSessionImpl()
 {
-    if (m_DBusInterface) {
-        m_DBusInterface->call(QLatin1String("objectUnref"));
-        delete m_DBusInterface;
-    }
 }
 
-void AuthSessionImpl::send2interface(const QString &operation,
-                                     const char *slot,
-                                     const QVariantList &arguments)
+PendingCall *AuthSessionImpl::send2interface(const QString &operation,
+                                             const char *slot,
+                                             const QVariantList &arguments)
 {
-    if (!m_DBusInterface || !m_DBusInterface->isValid()) {
-        emit m_parent->error(Error(Error::InternalCommunication,
-                                   SIGNOND_INTERNAL_COMMUNICATION_ERR_STR));
-        return;
-    }
-
-    bool res = true;
-
-    if (slot) {
-        QDBusMessage msg =
-            QDBusMessage::createMethodCall(m_DBusInterface->service(),
-                                           m_DBusInterface->path(),
-                                           m_DBusInterface->interface(),
-                                           operation);
-        if (!arguments.isEmpty())
-            msg.setArguments(arguments);
-
-        msg.setDelayedReply(true);
-
-        res = m_DBusInterface->connection().
-            callWithCallback(msg, this, slot,
-                             SLOT(errorSlot(const QDBusError&)),
-                             SIGNOND_MAX_TIMEOUT);
-    } else {
-        m_DBusInterface->callWithArgumentList(QDBus::NoBlock,
-                                              operation, arguments);
-    }
-
-    if (!res) {
-        emit m_parent->error(Error(Error::InternalCommunication,
-                                   m_DBusInterface->lastError().message()));
-
-    } else {
-        emit m_parent->stateChanged(AuthSession::ProcessPending,
-                                    QLatin1String("The request is added "
-                                                  "to queue."));
-    }
+    return m_dbusProxy.queueCall(operation, arguments,
+                                 slot,
+                                 SLOT(errorSlot(const QDBusError&)));
 }
 
 void AuthSessionImpl::setId(quint32 id)
 {
-    if (!m_isValid) {
-        emit m_parent->error(
-                Error(Error::InternalCommunication,
-                      QString(QLatin1String("AuthSession(%1) cannot perform "
-                                            "operation.")).arg(m_methodName)));
-        return;
-    }
-
     m_id = id;
-
-    QLatin1String remoteFunctionName("setId");
 
     QVariantList arguments;
     arguments += id;
 
-    if (m_DBusInterface)
-        send2interface(remoteFunctionName, 0, arguments);
-    else
-        m_operationQueueHandler.enqueueOperation(
-                                    SIGNOND_SESSION_SET_ID_METHOD,
-                                    QList<QGenericArgument *>() <<
-                                    (new Q_ARG(quint32, id)));
-}
-
-bool AuthSessionImpl::checkConnection()
-{
-    /*
-     * if the AuthSession is unable to connect to SignonDaemon
-     * or was refused to create a remote AuthSession then
-     * there is no sense to try again (????)
-     */
-    if (!m_isValid)
-        return false;
-
-    if (m_isAuthInProcessing)
-        return true;
-
-    if (!m_DBusInterface || m_DBusInterface->lastError().isValid())
-        return initInterface();
-
-    TRACE();
-    return true;
+    send2interface(QLatin1String("setId"), 0, arguments);
 }
 
 bool AuthSessionImpl::initInterface()
 {
     TRACE();
+    if (m_isAuthInProcessing) return true;
+
     m_isAuthInProcessing = true;
 
-    if (m_DBusInterface != NULL)
-    {
-        delete m_DBusInterface;
-        m_DBusInterface = 0;
-    }
-
-    m_operationQueueHandler.stopOperationsProcessing();
-
     QLatin1String operation("getAuthSessionObjectPath");
-    QDBusMessage msg = QDBusMessage::createMethodCall(SIGNOND_SERVICE,
-                                                      SIGNOND_DAEMON_OBJECTPATH,
-                                                      SIGNOND_DAEMON_INTERFACE,
-                                                      operation);
     QVariantList arguments;
     arguments += m_id;
     arguments += m_methodName;
 
-    msg.setArguments(arguments);
-    msg.setDelayedReply(true);
+    SignondAsyncDBusProxy *authService =
+        new SignondAsyncDBusProxy(SIGNOND_DAEMON_INTERFACE_C, this);
+    authService->setObjectPath(QDBusObjectPath(SIGNOND_DAEMON_OBJECTPATH));
 
-    return SIGNOND_BUS.callWithCallback(
-        msg, this,
-        SLOT(authenticationSlot(const QString&)),
-        SLOT(errorSlot(const QDBusError&)));
+    PendingCall *call =
+        authService->queueCall(operation,
+                               arguments,
+                               SLOT(authenticationSlot(QDBusPendingCallWatcher*)),
+                               SLOT(errorSlot(const QDBusError&)));
+    QObject::connect(call, SIGNAL(finished(QDBusPendingCallWatcher*)),
+                     this, SLOT(deleteServiceProxy()));
+    return true;
 }
 
 QString AuthSessionImpl::name()
@@ -208,45 +123,24 @@ QString AuthSessionImpl::name()
 void
 AuthSessionImpl::queryAvailableMechanisms(const QStringList &wantedMechanisms)
 {
-    if (!checkConnection()) {
-        qCritical() << SIGNOND_AUTHSESSION_CONNECTION_PROBLEM;
-        emit m_parent->error(Error(Error::InternalCommunication,
-                                   SIGNOND_AUTHSESSION_CONNECTION_PROBLEM));
-        return;
-    }
-
     QLatin1String remoteFunctionName("queryAvailableMechanisms");
 
     QVariantList arguments;
     arguments += wantedMechanisms;
 
-    if (m_DBusInterface)
-        send2interface(remoteFunctionName,
-                       SLOT(mechanismsAvailableSlot(const QStringList&)),
-                       arguments);
-    else
-        m_operationQueueHandler.enqueueOperation(
-                        SIGNOND_SESSION_QUERY_AVAILABLE_MECHANISMS_METHOD,
-                        QList<QGenericArgument *>() <<
-                        (new Q_ARG(QStringList, wantedMechanisms)));
+    send2interface(remoteFunctionName,
+                   SLOT(mechanismsAvailableSlot(QDBusPendingCallWatcher*)),
+                   arguments);
 }
 
 void AuthSessionImpl::process(const SessionData &sessionData,
                               const QString &mechanism)
 {
-    if (!checkConnection()) {
-        qCritical() << SIGNOND_AUTHSESSION_CONNECTION_PROBLEM;
-        emit m_parent->error(
-                Error(Error::InternalCommunication,
-                      SIGNOND_AUTHSESSION_CONNECTION_PROBLEM));
-        return;
-    }
-
-    if (m_isBusy) {
-        qCritical() << "AuthSession: client is busy";
+    if (m_processCall) {
+        TRACE() << "AuthSession: client is busy";
 
         emit m_parent->error(
-                Error(Error::Unknown,
+                Error(Error::WrongState,
                       QString(QLatin1String("AuthSession(%1) is busy"))
                          .arg(m_methodName)));
         return;
@@ -261,58 +155,35 @@ void AuthSessionImpl::process(const SessionData &sessionData,
 
     remoteFunctionName = QLatin1String("process");
 
-    if (m_DBusInterface) {
-        TRACE() << "sending to daemon";
-        send2interface(remoteFunctionName,
-                       SLOT(responseSlot(const QVariantMap&)), arguments);
-        m_isBusy = true;
-    } else {
-        TRACE() << "sending to queue";
-        QList<QGenericArgument *> args;
-        args << (new Q_ARG(QVariantMap, sessionDataVa))
-             << (new Q_ARG(QString, mechanism));
-
-        m_operationQueueHandler.enqueueOperation(SIGNOND_SESSION_PROCESS_METHOD,
-                                                 args);
-    }
+    m_processCall = send2interface(remoteFunctionName,
+                   SLOT(responseSlot(QDBusPendingCallWatcher*)), arguments);
+    Q_EMIT m_parent->stateChanged(AuthSession::ProcessPending,
+                                  QLatin1String("The request is added "
+                                                "to queue."));
 }
 
 void AuthSessionImpl::cancel()
 {
-    if (!checkConnection()) {
-        qCritical() << SIGNOND_AUTHSESSION_CONNECTION_PROBLEM;
-
-        emit m_parent->error(Error(Error::InternalCommunication,
-                                   SIGNOND_AUTHSESSION_CONNECTION_PROBLEM));
-        return;
-    }
-
-    if (!m_isBusy &&
-        !m_operationQueueHandler.queueContainsOperation(
-                                              SIGNOND_SESSION_PROCESS_METHOD)) {
-        qCritical() << "no requests to be canceled";
-        return;
-    }
-
-    if (!m_DBusInterface) {
-        m_operationQueueHandler.removeOperation(SIGNOND_SESSION_PROCESS_METHOD);
-
+    if (m_processCall && m_processCall->cancel()) {
         emit m_parent->error(Error(Error::SessionCanceled,
                                    QLatin1String("Process is canceled.")));
-
     } else {
-        TRACE() << "Sending cancel-request";
-        m_DBusInterface->call(QDBus::NoBlock, QLatin1String("cancel"));
+        send2interface(QLatin1String("cancel"), 0, QVariantList());
     }
 
-    m_isBusy = false;
+    m_processCall = 0;
+}
+
+void AuthSessionImpl::ignoreError(const QDBusError &err)
+{
+    TRACE() << err;
 }
 
 void AuthSessionImpl::errorSlot(const QDBusError &err)
 {
     TRACE() << err;
 
-    m_isBusy = false;
+    m_processCall = 0;
     int errCode = Error::Unknown;
     QString errMessage;
 
@@ -320,16 +191,6 @@ void AuthSessionImpl::errorSlot(const QDBusError &err)
         qCritical() << err.type();
         qCritical() << err.name();
         qCritical() << err.message();
-
-        /*
-         * if we got another error code then we have some sort of
-         * problems with DBus: try to reset DBus interface
-         * */
-        if (err.type() == QDBusError::UnknownObject) {
-            delete m_DBusInterface;
-            m_DBusInterface = NULL;
-        }
-
     } else if (err.name() == SIGNOND_SESSION_CANCELED_ERR_NAME) {
         errCode = Error::SessionCanceled;
     } else if (err.name() == SIGNOND_TIMED_OUT_ERR_NAME) {
@@ -349,8 +210,6 @@ void AuthSessionImpl::errorSlot(const QDBusError &err)
     } else if (err.name() == SIGNOND_MECHANISM_NOT_AVAILABLE_ERR_NAME) {
         errCode = Error::MechanismNotAvailable;
     } else if (err.name() == SIGNOND_METHOD_NOT_KNOWN_ERR_NAME) {
-        m_isValid = false;
-        m_isAuthInProcessing = false;
         errCode = Error::MethodNotAvailable;
     } else if (err.name() == SIGNOND_MISSING_DATA_ERR_NAME) {
          errCode = Error::MissingData;
@@ -381,18 +240,14 @@ void AuthSessionImpl::errorSlot(const QDBusError &err)
         errMessage = err.message().section(QLatin1Char(':'), 1, 1);
         if (!ok)
             errCode = Error::Unknown;
-    } else {
-        if (m_isAuthInProcessing) {
-            qCritical() << "Cannot connect to SignonDaemon: " << err;
+    }
 
-            m_isValid = false;
-            m_isAuthInProcessing = false;
+    if (m_isAuthInProcessing) {
+        TRACE() << "Error while registering";
+        m_isAuthInProcessing = false;
 
-            emit m_parent->error(
-                    Error(Error::InternalCommunication,
-                          SIGNOND_AUTHSESSION_CONNECTION_PROBLEM));
-            return;
-        }
+        m_dbusProxy.setError(err);
+        return;
     }
 
     if (errMessage.isEmpty())
@@ -402,47 +257,35 @@ void AuthSessionImpl::errorSlot(const QDBusError &err)
 
 }
 
-void AuthSessionImpl::authenticationSlot(const QString &path)
+void AuthSessionImpl::authenticationSlot(QDBusPendingCallWatcher *call)
 {
-    if (!path.isEmpty()) {
-        m_DBusInterface = new DBusInterface(SIGNOND_SERVICE,
-                                            path,
-                                            SIGNOND_AUTH_SESSION_INTERFACE_C,
-                                            SIGNOND_BUS);
-        m_DBusInterface->connect("stateChanged", this,
-                                 SLOT(stateSlot(int, const QString&)));
-        m_DBusInterface->connect("unregistered", this,
-                                 SLOT(unregisteredSlot()));
-
-        if (m_operationQueueHandler.queuedOperationsCount() > 0)
-            m_operationQueueHandler.execQueuedOperations();
-    } else {
-        int numberOfErrorReplies =
-            m_operationQueueHandler.queuedOperationsCount();
-        for (int i = 0; i < numberOfErrorReplies; i++) {
-
-            emit m_parent->error(
-                    Error(Error::Unknown,
-                          QLatin1String("The given session cannot be "
-                                        "accessed.")));
-        }
-        m_isValid = false;
-    }
+    QDBusPendingReply<QString> reply = *call;
+    m_dbusProxy.setObjectPath(QDBusObjectPath(reply.argumentAt<0>()));
 
     m_isAuthInProcessing = false;
-    if (m_operationQueueHandler.queuedOperationsCount() > 0)
-        m_operationQueueHandler.clearOperationsQueue();
 }
 
-void AuthSessionImpl::mechanismsAvailableSlot(const QStringList& mechanisms)
+void AuthSessionImpl::deleteServiceProxy()
 {
+    PendingCall *call = qobject_cast<PendingCall*>(sender());
+    /* This destroys the AsyncDBusProxy which we created just for registering
+     * the authsession. */
+    call->parent()->deleteLater();
+}
+
+void AuthSessionImpl::mechanismsAvailableSlot(QDBusPendingCallWatcher *call)
+{
+    QDBusPendingReply<QStringList> reply = *call;
+    QStringList mechanisms = reply.argumentAt<0>();
     emit m_parent->mechanismsAvailable(mechanisms);
 }
 
-void AuthSessionImpl::responseSlot(const QVariantMap &sessionDataVa)
+void AuthSessionImpl::responseSlot(QDBusPendingCallWatcher *call)
 {
-    m_isBusy = false;
+    m_processCall = 0;
 
+    QDBusPendingReply<QVariantMap> reply = *call;
+    QVariantMap sessionDataVa = reply.argumentAt<0>();
     emit m_parent->response(SessionData(sessionDataVa));
 }
 
@@ -453,9 +296,5 @@ void AuthSessionImpl::stateSlot(int state, const QString &message)
 
 void AuthSessionImpl::unregisteredSlot()
 {
-    delete m_DBusInterface;
-    m_DBusInterface = NULL;
-
-    m_isAuthInProcessing = false;
-    m_isValid = true;
+    m_dbusProxy.setObjectPath(QDBusObjectPath());
 }

@@ -22,6 +22,7 @@
 #include "databasetest.h"
 #include "signond/signoncommon.h"
 #include <QDBusMessage>
+#include <QSet>
 
 #include "credentialsdb.h"
 #include "signonidentityinfo.cpp"
@@ -157,16 +158,8 @@ void TestDatabase::methodsTest()
 {
     quint32 id;
 
-    //insert complete
-    SignonIdentityInfo info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl,
-                           testAcl);
+    SignonIdentityInfo info;
+    info.setMethods(testMethods);
 
     id = m_db->insertCredentials(info);
 
@@ -183,15 +176,10 @@ void TestDatabase::checkPasswordTest()
 
     m_db->openSecretsDB(secretsDbFile);
 
-    //insert complete
-    SignonIdentityInfo info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl);
+    SignonIdentityInfo info;
+    info.setUserName(QLatin1String("User"));
+    info.setPassword(QLatin1String("Pass"));
+    info.setStorePassword(true);
 
     id = m_db->insertCredentials(info);
 
@@ -209,15 +197,8 @@ void TestDatabase::credentialsTest()
     QList<SignonIdentityInfo> creds = m_db->credentials(filter);
     QVERIFY(creds.count() == 0);
 
-    //insert complete
-    SignonIdentityInfo info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl);
+    SignonIdentityInfo info;
+    info.setCaption(QLatin1String("Caption"));
 
     m_db->insertCredentials(info);
     creds = m_db->credentials(filter);
@@ -243,50 +224,46 @@ void TestDatabase::insertCredentialsTest()
     retInfo = m_db->credentials(id, false);
     QVERIFY(id != info.id());
     info.setId(id);
-    QVERIFY(retInfo == info);
+    QCOMPARE(retInfo.id(), info.id());
 
     //insert with empty acl
-    info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms);
+    info = SignonIdentityInfo();
+    info.setUserName(QLatin1String("User"));
+    info.setPassword(QLatin1String("Pass"));
+    info.setStorePassword(true);
+    info.setMethods(testMethods);
+    info.setRealms(testRealms);
 
     id = m_db->insertCredentials(info);
     retInfo = m_db->credentials(id, false);
     QVERIFY(id != info.id());
     info.setId(id);
     retInfo.setPassword(info.password());
-    QVERIFY(retInfo == info);
+    QCOMPARE(retInfo.id(), info.id());
+    QCOMPARE(retInfo.password(), info.password());
 
     //insert with empty methods
     MethodMap methods2;
-    info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           methods2,
-                           testRealms);
+    info = SignonIdentityInfo();
+    info.setUserName(QLatin1String("User"));
+    info.setPassword(QLatin1String("Pass"));
+    info.setStorePassword(true);
+    info.setMethods(methods2);
+    info.setRealms(testRealms);
 
     id = m_db->insertCredentials(info2);
     retInfo = m_db->credentials(id, false);
     QVERIFY(id != info2.id());
-    info2.setId(id);
-    retInfo.setPassword(info2.password());
-    QVERIFY(retInfo == info2);
+    QCOMPARE(retInfo.methods(), info2.methods());
 
     //insert complete
-    info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl);
+    info = SignonIdentityInfo();
+    info.setUserName(QLatin1String("User"));
+    info.setPassword(QLatin1String("Pass"));
+    info.setStorePassword(true);
+    info.setMethods(testMethods);
+    info.setRealms(testRealms);
+    info.setAccessControlList(testAcl);
 
     id = m_db->insertCredentials(info);
     retInfo = m_db->credentials(id, false);
@@ -295,18 +272,17 @@ void TestDatabase::insertCredentialsTest()
     QVERIFY(info.password() != retInfo.password());
     retInfo.setPassword(info.password());
 
-    qDebug() << info.methods();
-    qDebug() << retInfo.methods();
-    QVERIFY (info.methods() == retInfo.methods());
-
-    QVERIFY(retInfo == info);
+    QCOMPARE(info.methods(), retInfo.methods());
+    QCOMPARE(retInfo.password(), info.password());
+    QCOMPARE(retInfo.methods(), info.methods());
 
     //with password and secrets DB disabled
     id = m_db->insertCredentials(info);
     retInfo = m_db->credentials(id, true);
     QVERIFY(id != info.id());
     info.setId(id);
-    QCOMPARE(retInfo, info);
+    QCOMPARE(retInfo.id(), info.id());
+    QCOMPARE(retInfo.password(), info.password());
 
     //with password and secrets DB enabled
     bool success = m_db->openSecretsDB(secretsDbFile);
@@ -315,7 +291,8 @@ void TestDatabase::insertCredentialsTest()
     retInfo = m_db->credentials(id, true);
     QVERIFY(id != info.id());
     info.setId(id);
-    QVERIFY(retInfo == info);
+    QCOMPARE(retInfo.id(), info.id());
+    QCOMPARE(retInfo.password(), info.password());
 }
 
 void TestDatabase::updateCredentialsTest()
@@ -327,20 +304,18 @@ void TestDatabase::updateCredentialsTest()
     QVERIFY(success);
 
     //insert complete
-    SignonIdentityInfo info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl);
+    SignonIdentityInfo info;
+    info.setUserName(QLatin1String("User"));
+    info.setPassword(QLatin1String("Pass"));
+    info.setStorePassword(true);
+    info.setMethods(testMethods);
+    info.setRealms(testRealms);
+    info.setAccessControlList(testAcl);
 
     id = m_db->insertCredentials(info);
     retInfo = m_db->credentials(id, true);
-    QVERIFY(id != info.id());
     info.setId(id);
-    QVERIFY(retInfo == info);
+    QCOMPARE(retInfo.userName(), info.userName());
 
     //update complete
     QStringList urealms = QStringList() <<
@@ -356,23 +331,37 @@ void TestDatabase::updateCredentialsTest()
     umethods.insert(QLatin1String("UMethod2"), umechs);
     umethods.insert(QLatin1String("Method3"), QStringList());
 
-    SignonIdentityInfo updateInfo =
-        SignonIdentityInfo(id,
-                           QLatin1String("UpUser"),
-                           QLatin1String("UpdatedPass"), true,
-                           QLatin1String("Updated Caption"),
-                           umethods,
-                           urealms,
-                           testAcl,
-                           testAcl,
-                           2, 0, false);
+    SignonIdentityInfo updateInfo;
+    updateInfo.setId(id);
+    updateInfo.setUserName(QLatin1String("UpUser"));
+    updateInfo.setPassword(QLatin1String("UpdatedPass"));
+    updateInfo.setStorePassword(true);
+    updateInfo.setMethods(umethods);
+    updateInfo.setRealms(urealms);
+    updateInfo.setAccessControlList(testAcl);
 
     QVERIFY(m_db->updateCredentials(updateInfo));
 
     retInfo = m_db->credentials(id, true);
 
-    QVERIFY(!(retInfo == info));
-    QVERIFY((retInfo == updateInfo));
+    QVERIFY(retInfo.userName() != info.userName());
+    QCOMPARE(retInfo.userName(), updateInfo.userName());
+    QCOMPARE(retInfo.password(), updateInfo.password());
+    QCOMPARE(retInfo.storePassword(), updateInfo.storePassword());
+
+    /* The sorting of the method's mechanisms might vary, so we cannot just
+     * compare the whole method map as a whole. */
+    QCOMPARE(retInfo.methods().keys().toSet(),
+             updateInfo.methods().keys().toSet());
+    QMapIterator<QString, QStringList> it(retInfo.methods());
+    while (it.hasNext()) {
+        it.next();
+        QCOMPARE(it.value().toSet(), umethods.value(it.key()).toSet());
+    }
+
+    QCOMPARE(retInfo.realms().toSet(), updateInfo.realms().toSet());
+    QCOMPARE(retInfo.accessControlList().toSet(),
+             updateInfo.accessControlList().toSet());
 }
 
 void TestDatabase::removeCredentialsTest()
@@ -383,21 +372,19 @@ void TestDatabase::removeCredentialsTest()
     bool success = m_db->openSecretsDB(secretsDbFile);
     QVERIFY(success);
 
-    //insert complete
-    SignonIdentityInfo info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl);
+    SignonIdentityInfo info;
+    info.setUserName(QLatin1String("User"));
+    info.setPassword(QLatin1String("Pass"));
+    info.setStorePassword(true);
+    info.setMethods(testMethods);
+    info.setRealms(testRealms);
+    info.setAccessControlList(testAcl);
 
     id = m_db->insertCredentials(info);
     retInfo = m_db->credentials(id, true);
     QVERIFY(id != info.id());
     info.setId(id);
-    QVERIFY(retInfo == info);
+    QCOMPARE(retInfo.userName(), info.userName());
 
     QSqlQuery query;
     QString queryStr = QString::fromLatin1(
@@ -409,8 +396,8 @@ void TestDatabase::removeCredentialsTest()
     QVERIFY(m_db->removeCredentials(id));
 
     retInfo = m_db->credentials(id, true);
-    QVERIFY(!(retInfo == info));
-    QVERIFY(retInfo.id() == 0);
+    QVERIFY(retInfo.userName() != info.userName());
+    QCOMPARE(retInfo.id(), quint32(0));
 
     //check that db is cleared
     queryStr = QString::fromLatin1(
@@ -451,15 +438,13 @@ void TestDatabase::dataTest()
 {
     quint32 id;
     QString method = QLatin1String("Method1");
-    //insert complete
-    SignonIdentityInfo info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl);
+    SignonIdentityInfo info;
+    info.setUserName(QLatin1String("User"));
+    info.setPassword(QLatin1String("Pass"));
+    info.setStorePassword(true);
+    info.setMethods(testMethods);
+    info.setRealms(testRealms);
+    info.setAccessControlList(testAcl);
 
     id = m_db->insertCredentials(info);
 
@@ -552,15 +537,8 @@ void TestDatabase::dataTest()
 void TestDatabase::referenceTest()
 {
     quint32 id;
-    //insert complete
-    SignonIdentityInfo info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl);
+    SignonIdentityInfo info;
+    info.setUserName(QLatin1String("User"));
 
     id = m_db->insertCredentials(info);
 
@@ -610,14 +588,10 @@ void TestDatabase::cacheTest()
 {
     quint32 idWithStore, idWithoutStore;
 
-    SignonIdentityInfo info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl);
+    SignonIdentityInfo info;
+    info.setUserName(QLatin1String("User"));
+    info.setPassword(QLatin1String("Pass"));
+    info.setStorePassword(true);
 
     /* no secrets DB: data will be cached in memory */
 
@@ -658,49 +632,32 @@ void TestDatabase::accessControlListTest()
 {
     quint32 id;
 
-    //insert complete
-    SignonIdentityInfo info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl);
+    SignonIdentityInfo info;
+    info.setUserName(QLatin1String("User"));
+    info.setAccessControlList(testAcl);
 
     id = m_db->insertCredentials(info);
 
     QStringList acl = m_db->accessControlList(id);
     qDebug() << acl;
-    QVERIFY(acl == info.accessControlList());
+    QCOMPARE(acl, info.accessControlList());
 }
 
 void TestDatabase::credentialsOwnerSecurityTokenTest()
 {
     quint32 id;
 
-    //insert complete
-    SignonIdentityInfo info =
-        SignonIdentityInfo(0,
-                           QLatin1String("User"),
-                           QLatin1String("Pass"), true,
-                           QLatin1String("Caption"),
-                           testMethods,
-                           testRealms,
-                           testAcl,
-                           testAcl);
+    SignonIdentityInfo info;
+    info.setUserName(QLatin1String("User"));
+    info.setOwnerList(testAcl);
 
     id = m_db->insertCredentials(info);
 
     QString token = m_db->credentialsOwnerSecurityToken(id);
-    qDebug() << token;
-    QVERIFY(token == QLatin1String("AID::12345678"));
+    QCOMPARE(token, QLatin1String("AID::12345678"));
     QStringList tokens = m_db->ownerList(id);
-    qDebug() << tokens;
-    QVERIFY(tokens == testAcl);
+    QCOMPARE(tokens.toSet(), testAcl.toSet());
 
 }
 
-#if !defined(SSO_CI_TESTMANAGEMENT)
-    QTEST_MAIN(TestDatabase)
-#endif
+QTEST_MAIN(TestDatabase)

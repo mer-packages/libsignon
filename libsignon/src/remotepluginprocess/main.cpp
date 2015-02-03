@@ -64,6 +64,7 @@ void messageHandler(QtMsgType type, const char *msg)
 
 int main(int argc, char *argv[])
 {
+    openlog(NULL, LOG_CONS | LOG_PID, LOG_DAEMON);
     qInstallMsgHandler(messageHandler);
     debugInit();
 
@@ -96,5 +97,7 @@ int main(int argc, char *argv[])
     fflush(stdout);
 
     QObject::connect(process, SIGNAL(processStopped()), &app, SLOT(quit()));
-    return app.exec();
+    int ret = app.exec();
+    closelog();
+    return ret;
 }
