@@ -33,6 +33,7 @@
 #include <QVariantMap>
 
 #include "identityinfo.h"
+#include "signond/signoncommon.h"
 
 namespace SignOn {
 
@@ -43,51 +44,102 @@ typedef QMap<MethodName, MechanismsList> MethodMap;
  * IdentityInfo class implementation.
  * @sa IdentityInfo
  */
-class IdentityInfoImpl
+class IdentityInfoImpl: public QVariantMap
 {
     friend class IdentityInfo;
     friend class IdentityImpl;
 
-    Q_DISABLE_COPY(IdentityInfoImpl)
-
 public:
-    IdentityInfoImpl(IdentityInfo *identityInfo);
+    IdentityInfoImpl();
     ~IdentityInfoImpl();
 
-    void addMethod(const MethodName &method,
-                   const MechanismsList &mechanismsList);
+    void setId(quint32 id) { insert(SIGNOND_IDENTITY_INFO_ID, id); }
+    quint32 id() const { return value(SIGNOND_IDENTITY_INFO_ID, 0).toUInt(); }
+
+    void setUserName(const QString &userName) {
+        insert(SIGNOND_IDENTITY_INFO_USERNAME, userName);
+    }
+
+    QString userName() const {
+        return value(SIGNOND_IDENTITY_INFO_USERNAME).toString();
+    }
+
+    void setCaption(const QString &caption) {
+        insert(SIGNOND_IDENTITY_INFO_CAPTION, caption);
+    }
+
+    QString caption() const {
+        return value(SIGNOND_IDENTITY_INFO_CAPTION).toString();
+    }
+
+    void setMethods(const MethodMap &methods) {
+        insert(SIGNOND_IDENTITY_INFO_AUTHMETHODS, QVariant::fromValue(methods));
+    }
+
+    MethodMap methods() const {
+        return value(SIGNOND_IDENTITY_INFO_AUTHMETHODS).value<MethodMap>();
+    }
+
+    void setRealms(const QStringList &realms) {
+        insert(SIGNOND_IDENTITY_INFO_REALMS, realms);
+    }
+
+    QStringList realms() const {
+        return value(SIGNOND_IDENTITY_INFO_REALMS).toStringList();
+    }
+
+    void setOwners(const QStringList &owners) {
+        insert(SIGNOND_IDENTITY_INFO_OWNER, owners);
+    }
+
+    QStringList owners() const {
+        return value(SIGNOND_IDENTITY_INFO_OWNER).toStringList();
+    }
+
+    void setAccessControlList(const QStringList &accessControlList) {
+        insert(SIGNOND_IDENTITY_INFO_ACL, accessControlList);
+    }
+
+    QStringList accessControlList() const {
+        return value(SIGNOND_IDENTITY_INFO_ACL).toStringList();
+    }
+
+    void setSecret(const QString &secret) {
+        insert(SIGNOND_IDENTITY_INFO_SECRET, secret);
+    }
+
+    QString secret() const {
+        return value(SIGNOND_IDENTITY_INFO_SECRET).toString();
+    }
+
+    void setStoreSecret(bool storeSecret) {
+        insert(SIGNOND_IDENTITY_INFO_STORESECRET, storeSecret);
+    }
+
+    bool storeSecret() const {
+        return value(SIGNOND_IDENTITY_INFO_STORESECRET).toBool();
+    }
+
     void updateMethod(const MethodName &method,
                       const MechanismsList &mechanismsList);
     void removeMethod(const MethodName &method);
-    void setType(IdentityInfo::CredentialsType type);
-    IdentityInfo::CredentialsType type() const;
-    void setRefCount(qint32 refCount);
-    qint32 refCount() const;
 
-    bool isEmpty() const;
+    void setType(IdentityInfo::CredentialsType type) {
+        insert(SIGNOND_IDENTITY_INFO_TYPE, type);
+    }
+
+    IdentityInfo::CredentialsType type() const {
+        int typeInt = value(SIGNOND_IDENTITY_INFO_TYPE).toInt();
+        return IdentityInfo::CredentialsType(typeInt);
+    }
+
+    qint32 refCount() const {
+        return value(SIGNOND_IDENTITY_INFO_REFCOUNT).toInt();
+    }
+
     bool hasMethod(const MethodName &method) const;
-    void clear();
-    QVariantMap toMap() const;
+    QVariantMap toMap() const { return *this; }
     void updateFromMap(const QVariantMap &map);
-
-private:
-    void copy(const IdentityInfoImpl &other);
-
-private:
-    IdentityInfo *m_identityInfo;
-
-    quint32 m_id;
-    QString m_userName;
-    QString m_secret;
-    bool m_storeSecret;
-    QString m_caption;
-    MethodMap m_authMethods;
-    QStringList m_realms;
-    QStringList m_accessControlList;
-    QString m_owner;
-    IdentityInfo::CredentialsType m_type;
-    qint32 m_refCount;
-    bool m_isEmpty;
 };
 
 } //namespace SignOn

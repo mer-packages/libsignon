@@ -1,9 +1,9 @@
 /*
  * This file is part of signon
  *
- * Copyright (C) 2011 Intel Corporation.
+ * Copyright (C) 2013 Canonical Ltd.
  *
- * Contact: Elena Reshetova <elena.reshetova@intel.com>
+ * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -20,26 +20,25 @@
  * 02110-1301 USA
  */
 
-#include "smackac-plugin.h"
-#include "smack-access-control-manager.h"
+#ifndef SIGNON_MOCK_PLUGIN_H
+#define SIGNON_MOCK_PLUGIN_H
 
-#include <QDebug>
+#include <QObject>
+#include <SignOn/ExtensionInterface>
 
-using namespace SignOn;
-
-SmackAccessControlPlugin::SmackAccessControlPlugin():
-    QObject(0)
+class Plugin: public QObject, public SignOn::ExtensionInterface3
 {
-    setObjectName(QLatin1String("smack-ac"));
-}
-
-AbstractAccessControlManager *
-SmackAccessControlPlugin::accessControlManager(QObject *parent) const
-{
-    qDebug() << Q_FUNC_INFO;
-    return new SmackAccessControlManager(parent);
-}
-
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-Q_EXPORT_PLUGIN2(smack-ac, SmackAccessControlPlugin);
+    Q_OBJECT
+    Q_INTERFACES(SignOn::ExtensionInterface3)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    Q_PLUGIN_METADATA(IID "com.nokia.SingleSignOn.ExtensionInterface/3.0")
 #endif
+
+public:
+    Plugin(QObject *parent = 0);
+
+    SignOn::AbstractAccessControlManager *
+        accessControlManager(QObject *parent = 0) const;
+};
+
+#endif // SIGNON_MOCK_PLUGIN_H

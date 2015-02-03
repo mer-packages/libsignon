@@ -91,14 +91,12 @@ QString CAMConfiguration::metadataDBPath() const
 
 QString CAMConfiguration::cryptoManagerName() const
 {
-    return m_settings.value(QLatin1String("CryptoManager"),
-                            QLatin1String("default")).toString();
+    return m_settings.value(QLatin1String("CryptoManager")).toString();
 }
 
 QString CAMConfiguration::accessControlManagerName() const
 {
-    return m_settings.value(QLatin1String("AccessControlManager"),
-                            QLatin1String("default")).toString();
+    return m_settings.value(QLatin1String("AccessControlManager")).toString();
 }
 
 bool CAMConfiguration::useEncryption() const
@@ -108,8 +106,7 @@ bool CAMConfiguration::useEncryption() const
 
 QString CAMConfiguration::secretsStorageName() const
 {
-    return m_settings.value(QLatin1String("SecretsStorage"),
-                            QLatin1String("default")).toString();
+    return m_settings.value(QLatin1String("SecretsStorage")).toString();
 }
 
 void CAMConfiguration::setStoragePath(const QString &storagePath) {
@@ -197,7 +194,7 @@ bool CredentialsAccessManager::init()
 
     if (m_secretsStorage == 0) {
         QString name = m_CAMConfiguration.secretsStorageName();
-        if (name != QLatin1String("default")) {
+        if (!name.isEmpty() && name != QLatin1String("default")) {
             BLAME() << "Couldn't load SecretsStorage:" << name;
         }
         TRACE() << "No SecretsStorage set, using default (dummy)";
@@ -207,7 +204,7 @@ bool CredentialsAccessManager::init()
     //Initialize AccessControlManager
     if (m_acManager == 0) {
         QString name = m_CAMConfiguration.accessControlManagerName();
-        if (name != QLatin1String("default")) {
+        if (!name.isEmpty() && name != QLatin1String("default")) {
             BLAME() << "Couldn't load AccessControlManager:" << name;
         }
         TRACE() << "No AccessControlManager set, using default (dummy)";
@@ -222,7 +219,7 @@ bool CredentialsAccessManager::init()
     //Initialize CryptoManager
     if (m_cryptoManager == 0) {
         QString name = m_CAMConfiguration.cryptoManagerName();
-        if (name != QLatin1String("default")) {
+        if (!name.isEmpty() && name != QLatin1String("default")) {
             BLAME() << "Couldn't load CryptoManager:" << name;
         }
         TRACE() << "No CryptoManager set, using default (dummy)";
@@ -327,7 +324,8 @@ bool CredentialsAccessManager::initExtension(QObject *plugin)
     if (extension3 != 0) {
         /* Instantiate this plugin's CryptoManager only if it's the plugin
          * requested in the config file. */
-        if (plugin->objectName() == m_CAMConfiguration.cryptoManagerName()) {
+        if (m_CAMConfiguration.cryptoManagerName().isEmpty() ||
+            plugin->objectName() == m_CAMConfiguration.cryptoManagerName()) {
             SignOn::AbstractCryptoManager *cryptoManager =
                 extension3->cryptoManager(this);
             if (cryptoManager != 0) {
@@ -341,7 +339,8 @@ bool CredentialsAccessManager::initExtension(QObject *plugin)
             }
         }
 
-        if (plugin->objectName() == m_CAMConfiguration.secretsStorageName()) {
+        if (m_CAMConfiguration.secretsStorageName().isEmpty() ||
+            plugin->objectName() == m_CAMConfiguration.secretsStorageName()) {
             SignOn::AbstractSecretsStorage *secretsStorage =
                 extension3->secretsStorage(this);
             if (secretsStorage != 0) {
@@ -357,7 +356,8 @@ bool CredentialsAccessManager::initExtension(QObject *plugin)
 
         /* Instantiate this plugin's AccessControlManager only if it's the
          * plugin requested in the config file. */
-        if (plugin->objectName() ==
+        if (m_CAMConfiguration.accessControlManagerName().isEmpty() ||
+            plugin->objectName() ==
             m_CAMConfiguration.accessControlManagerName()) {
             SignOn::AbstractAccessControlManager *acManager =
                 extension3->accessControlManager(this);

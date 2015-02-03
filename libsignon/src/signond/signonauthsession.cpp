@@ -2,6 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
+ * Copyright (C) 2013 Canonical Ltd.
  *
  * Conta Alberto Mardegan <alberto.mardegan@canonical.com>
  *
@@ -31,10 +32,11 @@ SignonAuthSession::SignonAuthSession(quint32 id,
                                      pid_t ownerPid):
     m_id(id),
     m_method(method),
-    m_registered(false),
     m_ownerPid(ownerPid)
 {
     TRACE();
+
+    (void)new SignonAuthSessionAdaptor(this);
 
     static quint32 incr = 0;
     QString objectName = SIGNOND_DAEMON_OBJECTPATH +
@@ -46,58 +48,32 @@ SignonAuthSession::SignonAuthSession(quint32 id,
 
 SignonAuthSession::~SignonAuthSession()
 {
+    Q_EMIT unregistered();
     TRACE();
-
-    if (m_registered)
-    {
-        emit unregistered();
-        QDBusConnection connection(SIGNOND_BUS);
-        connection.unregisterObject(objectName());
-    }
 }
 
-QString SignonAuthSession::getAuthSessionObjectPath(const quint32 id,
-                                                    const QString &method,
-                                                    SignonDaemon *parent,
-                                                    bool &supportsAuthMethod,
-                                                    pid_t ownerPid)
+SignonAuthSession *SignonAuthSession::createAuthSession(const quint32 id,
+                                                        const QString &method,
+                                                        SignonDaemon *parent,
+                                                        pid_t ownerPid)
 {
     TRACE();
-    supportsAuthMethod = true;
-    SignonAuthSession* sas = new SignonAuthSession(id, method, ownerPid);
-
-    QDBusConnection connection(SIGNOND_BUS);
-    if (!connection.isConnected()) {
-        TRACE() << "Cannot get DBUS object connected";
-        delete sas;
-        return QString();
-    }
-
-    (void)new SignonAuthSessionAdaptor(sas);
-    QString objectName = sas->objectName();
-    if (!connection.registerObject(sas->objectName(), sas,
-                                   QDBusConnection::ExportAdaptors)) {
-        TRACE() << "Object cannot be registered: " << objectName;
-        delete sas;
-        return QString();
-    }
+    SignonAuthSession *sas = new SignonAuthSession(id, method, ownerPid);
 
     SignonSessionCore *core = SignonSessionCore::sessionCore(id, method, parent);
     if (!core) {
         TRACE() << "Cannot retrieve proper tasks queue";
-        supportsAuthMethod = false;
         delete sas;
-        return QString();
+        return NULL;
     }
 
-    sas->objectRegistered();
     sas->setParent(core);
 
     connect(core, SIGNAL(stateChanged(const QString&, int, const QString&)),
             sas, SLOT(stateChangedSlot(const QString&, int, const QString&)));
 
-    TRACE() << "SignonAuthSession is created successfully: " << objectName;
-    return objectName;
+    TRACE() << "SignonAuthSession created successfully:" << sas->objectName();
+    return sas;
 }
 
 void SignonAuthSession::stopAllAuthSessions()
@@ -156,12 +132,6 @@ void SignonAuthSession::objectUnref()
     TRACE();
     cancel();
 
-    if (m_registered) {
-        QDBusConnection connection(SIGNOND_BUS);
-        connection.unregisterObject(objectName());
-        m_registered = false;
-    }
-
     deleteLater();
 }
 
@@ -173,9 +143,4 @@ void SignonAuthSession::stateChangedSlot(const QString &sessionKey,
 
     if (sessionKey == objectName())
         emit stateChanged(state, message);
-}
-
-void SignonAuthSession::objectRegistered()
-{
-    m_registered = true;
 }

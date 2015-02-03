@@ -2,7 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
- * Copyright (C) 2012 Canonical Ltd.
+ * Copyright (C) 2012-2013 Canonical Ltd.
  *
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
  *
@@ -54,15 +54,13 @@ public:
 
     friend class SignonAuthSessionAdaptor;
 
-    static QString getAuthSessionObjectPath(const quint32 id,
-                                            const QString &method,
-                                            SignonDaemon *parent,
-                                            bool &supportsAuthMethod,
-                                            pid_t ownerPid);
+    static SignonAuthSession *createAuthSession(const quint32 id,
+                                                const QString &method,
+                                                SignonDaemon *parent,
+                                                pid_t ownerPid);
     static void stopAllAuthSessions();
     quint32 id() const;
     QString method() const;
-    void objectRegistered();
     pid_t ownerPid() const;
 
 public Q_SLOTS:
@@ -89,7 +87,6 @@ protected:
 private:
     quint32 m_id;
     QString m_method;
-    bool m_registered;
     pid_t m_ownerPid;
 
     Q_DISABLE_COPY(SignonAuthSession)

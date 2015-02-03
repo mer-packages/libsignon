@@ -33,6 +33,17 @@ DEFINES += DEBUG_ENABLED
 #TODO comment this to restrict plugins to run under signon user
 DEFINES += NO_SIGNON_USER
 
+# Qt4/Qt5 common checks
+greaterThan(QT_MAJOR_VERSION, 4) {
+    LIBSIGNON = libsignon-qt5
+    CMAKE_BASENAME = SignOnQt5
+    LIBQTCORE = Qt5Core
+} else {
+    LIBSIGNON = libsignon-qt
+    CMAKE_BASENAME = SignOnQt
+    LIBQTCORE = QtCore
+}
+
 #-----------------------------------------------------------------------------
 # setup the installation prefix
 #-----------------------------------------------------------------------------
@@ -70,6 +81,15 @@ isEmpty( LIBDIR ) {
     message("==== library install path set to `$${INSTALL_LIBDIR}'")
 }
 
+isEmpty ( CMAKE_CONFIG_PATH ) {
+    CMAKE_CONFIG_PATH = $${INSTALL_LIBDIR}/cmake/$${CMAKE_BASENAME}
+    message("====")
+    message("==== NOTE: To override the cmake module installation path run: `qmake CMAKE_CONFIG_PATH=/custom/path'")
+    message("==== (current installation path is `$${CMAKE_CONFIG_PATH}')")
+} else {
+    message("====")
+    message("==== cmake module install path set to `$${CMAKE_CONFIG_PATH}'")
+}
 
 # Default directory for signond extensions
 _EXTENSIONS = $$(SIGNOND_EXTENSIONS_DIR)

@@ -23,9 +23,8 @@
 #ifndef SIGNONIDENTITYINFO_H
 #define SIGNONIDENTITYINFO_H
 
-#include <QMap>
 #include <QStringList>
-#include <QVariant>
+#include <QVariantMap>
 
 #include "signond/signoncommon.h"
 
@@ -40,87 +39,128 @@ typedef QMap<MethodName, MechanismsList> MethodMap;
  * Daemon side representation of identity information.
  * @todo description.
  */
-struct SignonIdentityInfo
+struct SignonIdentityInfo: protected QVariantMap
 {
     SignonIdentityInfo();
     SignonIdentityInfo(const QVariantMap &info);
-    SignonIdentityInfo(const quint32 id,
-                       const QString &userName,
-                       const QString &password,
-                       const bool storePassword,
-                       const QString &caption,
-                       const MethodMap &methods,
-                       const QStringList &realms = QStringList(),
-                       const QStringList &accessControlList = QStringList(),
-                       const QStringList &ownerList = QStringList(),
-                       int type = 0,
-                       int refCount = 0,
-                       bool validated = false);
 
-    const QList<QVariant> toVariantList();
     const QVariantMap toMap() const;
 
-    bool operator== (const SignonIdentityInfo &other) const;
-    SignonIdentityInfo &operator=(const SignonIdentityInfo &other);
+    void setNew() { setId(SIGNOND_NEW_IDENTITY); }
+    bool isNew() const { return id() == SIGNOND_NEW_IDENTITY; }
+    void setId(quint32 id) { insert(SIGNOND_IDENTITY_INFO_ID, id); }
+    quint32 id() const { return value(SIGNOND_IDENTITY_INFO_ID, 0).toUInt(); }
 
-    void setNew() { m_id = SIGNOND_NEW_IDENTITY; }
-    bool isNew() const { return m_id == SIGNOND_NEW_IDENTITY; }
-    void setId(quint32 id) { m_id = id; }
-    quint32 id() const { return m_id; }
-
-    void setUserName(const QString &userName) { m_userName = userName; }
-    QString userName() const { return m_userName; }
-    void setUserNameSecret(bool secret) { m_isUserNameSecret = secret; }
-    bool isUserNameSecret() const { return m_isUserNameSecret; }
-
-    void setPassword(const QString &password) { m_password = password; }
-    QString password() const { return m_password; }
-    void setStorePassword(bool storePassword) {
-        m_storePassword = storePassword;
+    void setUserName(const QString &userName) {
+        insert(SIGNOND_IDENTITY_INFO_USERNAME, userName);
     }
-    bool storePassword() const { return m_storePassword; }
 
-    void setCaption(const QString &caption) { m_caption = caption; }
-    QString caption() const { return m_caption; }
+    QString userName() const {
+        return value(SIGNOND_IDENTITY_INFO_USERNAME).toString();
+    }
 
-    void setRealms(const QStringList &realms) { m_realms = realms; }
-    QStringList realms() const { return m_realms; }
+    void setUserNameSecret(bool secret) {
+        insert(SIGNOND_IDENTITY_INFO_USERNAME_IS_SECRET, secret);
+    }
 
-    void setMethods(const MethodMap &methods)
-        { m_methods = methods; }
-    MethodMap methods() const { return m_methods; }
+    bool isUserNameSecret() const {
+        return value(SIGNOND_IDENTITY_INFO_USERNAME_IS_SECRET).toBool();
+    }
 
-    void setAccessControlList(const QStringList &acl)
-        { m_accessControlList = acl; }
-    QStringList accessControlList() const { return m_accessControlList; }
+    void setPassword(const QString &password) {
+        insert(SIGNOND_IDENTITY_INFO_SECRET, password);
+    }
 
-    void setValidated(bool validated) { m_validated = validated; }
-    bool validated() const { return m_validated; }
+    QString password() const {
+        return value(SIGNOND_IDENTITY_INFO_SECRET).toString();
+    }
 
-    void setType(const int type) { m_type = type; }
-    int type() const { return m_type; }
+    void removeSecrets() {
+        remove(SIGNOND_IDENTITY_INFO_SECRET);
+        if (isUserNameSecret())
+            remove(SIGNOND_IDENTITY_INFO_USERNAME);
+    }
 
-    void setOwnerList(const QStringList &owner) { m_ownerList = owner; }
-    QStringList ownerList() const { return m_ownerList; }
+    bool hasSecrets() const {
+        return contains(SIGNOND_IDENTITY_INFO_SECRET) ||
+            (isUserNameSecret() && contains(SIGNOND_IDENTITY_INFO_USERNAME));
+    }
+
+    void setStorePassword(bool storePassword) {
+        insert(SIGNOND_IDENTITY_INFO_STORESECRET, storePassword);
+    }
+
+    bool storePassword() const {
+        return value(SIGNOND_IDENTITY_INFO_STORESECRET).toBool();
+    }
+
+    void setCaption(const QString &caption) {
+        insert(SIGNOND_IDENTITY_INFO_CAPTION, caption);
+    }
+
+    QString caption() const {
+        return value(SIGNOND_IDENTITY_INFO_CAPTION).toString();
+    }
+
+    void setRealms(const QStringList &realms) {
+        insert(SIGNOND_IDENTITY_INFO_REALMS, realms);
+    }
+
+    QStringList realms() const {
+        return value(SIGNOND_IDENTITY_INFO_REALMS).toStringList();
+    }
+
+    void setMethods(const MethodMap &methods) {
+        insert(SIGNOND_IDENTITY_INFO_AUTHMETHODS, QVariant::fromValue(methods));
+    }
+
+    MethodMap methods() const {
+        return value(SIGNOND_IDENTITY_INFO_AUTHMETHODS).value<MethodMap>();
+    }
+
+    void setAccessControlList(const QStringList &accessControlList) {
+        insert(SIGNOND_IDENTITY_INFO_ACL, accessControlList);
+    }
+
+    QStringList accessControlList() const {
+        return value(SIGNOND_IDENTITY_INFO_ACL).toStringList();
+    }
+
+    void setValidated(bool validated) {
+        insert(SIGNOND_IDENTITY_INFO_VALIDATED, validated);
+    }
+
+    bool validated() const {
+        return value(SIGNOND_IDENTITY_INFO_VALIDATED).toBool();
+    }
+
+    void setType(int type) {
+        insert(SIGNOND_IDENTITY_INFO_TYPE, type);
+    }
+
+    int type() const {
+        return value(SIGNOND_IDENTITY_INFO_TYPE).toInt();
+    }
+
+    void setOwnerList(const QStringList &owners) {
+        insert(SIGNOND_IDENTITY_INFO_OWNER, owners);
+    }
+
+    QStringList ownerList() const {
+        return value(SIGNOND_IDENTITY_INFO_OWNER).toStringList();
+    }
+
+    void setRefCount(int refCount) {
+        insert(SIGNOND_IDENTITY_INFO_REFCOUNT, refCount);
+    }
+
+    int refCount() const {
+        return value(SIGNOND_IDENTITY_INFO_REFCOUNT).toInt();
+    }
 
     bool checkMethodAndMechanism(const QString &method,
                                  const QString &mechanism,
                                  QString &allowedMechanism);
-
-private:
-    quint32 m_id;
-    QString m_userName;
-    QString m_password;
-    bool m_storePassword;
-    QString m_caption;
-    MethodMap m_methods;
-    QStringList m_realms;
-    QStringList m_accessControlList;
-    QStringList m_ownerList;
-    int m_type;
-    int m_refCount;
-    bool m_validated;
-    bool m_isUserNameSecret;
 }; //struct SignonIdentityInfo
 
 } //namespace SignonDaemonNS

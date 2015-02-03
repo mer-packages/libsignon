@@ -20,168 +20,60 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA
  */
+#include "signond-common.h"
 #include "signonidentityinfo.h"
 
 #include <QBuffer>
+#include <QDBusArgument>
 #include <QDataStream>
 #include <QDebug>
 
 namespace SignonDaemonNS {
 
-SignonIdentityInfo::SignonIdentityInfo():
-    m_id(0),
-    m_userName(QString()),
-    m_password(QString()),
-    m_storePassword(false),
-    m_caption(QString()),
-    m_methods(QMap<QString, QStringList>()),
-    m_realms(QStringList()),
-    m_accessControlList(QStringList()),
-    m_ownerList(QStringList()),
-    m_type(0),
-    m_refCount(0),
-    m_validated(false),
-    m_isUserNameSecret(false)
+SignonIdentityInfo::SignonIdentityInfo()
 {
 }
 
-SignonIdentityInfo::SignonIdentityInfo(const QVariantMap &info):
-    m_id(0),
-    m_userName(QString()),
-    m_password(QString()),
-    m_storePassword(false),
-    m_caption(QString()),
-    m_methods(QMap<QString, QStringList>()),
-    m_realms(QStringList()),
-    m_accessControlList(QStringList()),
-    m_ownerList(QStringList()),
-    m_type(0),
-    m_refCount(0),
-    m_validated(false),
-    m_isUserNameSecret(false)
+SignonIdentityInfo::SignonIdentityInfo(const QVariantMap &info)
 {
-    m_id = info.value(SIGNOND_IDENTITY_INFO_ID).toInt();
-    m_userName = info.value(SIGNOND_IDENTITY_INFO_USERNAME).toString();
-    m_password = info.value(SIGNOND_IDENTITY_INFO_SECRET).toString();
-    m_storePassword = info.value(SIGNOND_IDENTITY_INFO_STORESECRET).toBool();
-    m_caption = info.value(SIGNOND_IDENTITY_INFO_CAPTION).toString();
-    m_methods =
-        info.value(SIGNOND_IDENTITY_INFO_AUTHMETHODS).value<MethodMap>();
+    /* We need to expand any QDBusArguments which might be present, since
+     * the map is likely to be coming from QDBus. */
+    QVariantMap::const_iterator i;
+    for (i = info.constBegin(); i != info.constEnd(); i++) {
+        if (qstrcmp(i.value().typeName(), "QDBusArgument") == 0) {
+            QDBusArgument container = i.value().value<QDBusArgument>();
 
-    m_realms = info.value(SIGNOND_IDENTITY_INFO_REALMS).toStringList();
-    m_accessControlList = info.value(SIGNOND_IDENTITY_INFO_ACL).toStringList();
-    m_ownerList = info.value(SIGNOND_IDENTITY_INFO_OWNER).toStringList();
-    m_type = info.value(SIGNOND_IDENTITY_INFO_TYPE).toInt();
-    m_refCount = info.value(SIGNOND_IDENTITY_INFO_REFCOUNT).toInt();
-    m_validated = info.value(SIGNOND_IDENTITY_INFO_VALIDATED).toBool();
-}
-
-SignonIdentityInfo::SignonIdentityInfo(const quint32 id,
-                                       const QString &userName,
-                                       const QString &password,
-                                       const bool storePassword,
-                                       const QString &caption,
-                                       const MethodMap &methods,
-                                       const QStringList &realms,
-                                       const QStringList &accessControlList,
-                                       const QStringList &ownerList,
-                                       int type,
-                                       int refCount,
-                                       bool validated):
-    m_id(id),
-    m_userName(userName),
-    m_password(password),
-    m_storePassword(storePassword),
-    m_caption(caption),
-    m_methods(methods),
-    m_realms(realms),
-    m_accessControlList(accessControlList),
-    m_ownerList(ownerList),
-    m_type(type),
-    m_refCount(refCount),
-    m_validated(validated),
-    m_isUserNameSecret(false)
-{
-}
-
-const QList<QVariant> SignonIdentityInfo::toVariantList()
-{
-    QList<QVariant> list;
-    list << m_id
-         << m_userName
-         << m_password
-         << m_caption
-         << m_realms
-         << QVariant::fromValue(m_methods)
-         << m_accessControlList
-         << m_type
-         << m_refCount
-         << m_validated
-         << m_isUserNameSecret;
-
-    return list;
+            if (i.key() == SIGNOND_IDENTITY_INFO_AUTHMETHODS) {
+                MethodMap methodMap = qdbus_cast<MethodMap>(container);
+                setMethods(methodMap);
+            } else {
+                BLAME() << "Found unsupported QDBusArgument in key" << i.key();
+            }
+        } else {
+            insert(i.key(), i.value());
+        }
+    }
 }
 
 const QVariantMap SignonIdentityInfo::toMap() const
 {
-    QVariantMap values;
-    values.insert(SIGNOND_IDENTITY_INFO_ID, m_id);
-    values.insert(SIGNOND_IDENTITY_INFO_USERNAME, m_userName);
-    values.insert(SIGNOND_IDENTITY_INFO_SECRET, m_password);
-    values.insert(SIGNOND_IDENTITY_INFO_CAPTION, m_caption);
-    values.insert(SIGNOND_IDENTITY_INFO_REALMS, m_realms);
-    values.insert(SIGNOND_IDENTITY_INFO_AUTHMETHODS,
-                  QVariant::fromValue(m_methods));
-    values.insert(SIGNOND_IDENTITY_INFO_ACL, m_accessControlList);
-    values.insert(SIGNOND_IDENTITY_INFO_TYPE, m_type);
-    values.insert(SIGNOND_IDENTITY_INFO_REFCOUNT, m_refCount);
-    values.insert(SIGNOND_IDENTITY_INFO_VALIDATED, m_validated);
-    values.insert(SIGNOND_IDENTITY_INFO_USERNAME_IS_SECRET,
-                  m_isUserNameSecret);
-    return values;
-}
-
-bool SignonIdentityInfo::operator==(const SignonIdentityInfo &other) const
-{
-    //do not care about list element order
-    SignonIdentityInfo me = *this;
-    SignonIdentityInfo you = other;
-    me.m_realms.sort();
-    you.m_realms.sort();
-    me.m_accessControlList.sort();
-    you.m_accessControlList.sort();
-    QMapIterator<QString, QStringList> it(me.m_methods);
-    while (it.hasNext()) {
-        it.next();
-        QStringList list1 = it.value();
-        QStringList list2 = you.m_methods.value(it.key());
-        list1.sort();
-        list2.sort();
-        if (list1 != list2) return false;
-    }
-
-    return (m_id == other.m_id)
-            && (m_userName == other.m_userName)
-            && (m_password == other.m_password)
-            && (m_caption == other.m_caption)
-            && (me.m_realms ==you.m_realms)
-            && (me.m_accessControlList == you.m_accessControlList)
-            && (m_type == other.m_type)
-            && (m_validated == other.m_validated);
+    return *this;
 }
 
 bool SignonIdentityInfo::checkMethodAndMechanism(const QString &method,
                                                  const QString &mechanism,
                                                  QString &allowedMechanism)
 {
+    MethodMap methodMap = methods();
+
     // If no methods have been specified for an identity assume anything goes
-    if (m_methods.isEmpty())
+    if (methodMap.isEmpty())
         return true;
 
-    if (!m_methods.contains(method))
+    if (!methodMap.contains(method))
         return false;
 
-    MechanismsList mechs = m_methods[method];
+    MechanismsList mechs = methodMap[method];
     // If no mechanisms have been specified for a method, assume anything goes
     if (mechs.isEmpty())
         return true;
@@ -214,25 +106,6 @@ bool SignonIdentityInfo::checkMethodAndMechanism(const QString &method,
 
     allowedMechanism = allowedMechanisms.join(QLatin1String(" "));
     return true;
-}
-
-SignonIdentityInfo &
-SignonIdentityInfo::operator=(const SignonIdentityInfo &other)
-{
-
-    m_id = other.m_id;
-    m_userName = other.m_userName;
-    m_password = other.m_password ;
-    m_storePassword = other.m_storePassword;
-    m_caption = other.m_caption;
-    m_realms = other.m_realms;
-    m_accessControlList = other.m_accessControlList;
-    m_ownerList = other.m_ownerList;
-    m_type = other.m_type;
-    m_refCount = other.m_refCount;
-    m_validated = other.m_validated;
-    m_methods = other.m_methods;
-    return *this;
 }
 
 } //namespace SignonDaemonNS

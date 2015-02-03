@@ -46,54 +46,13 @@ int finishedClients = 0;
 
 #define TEST_DONE  qDebug("\n\n ----------------- %s PASS ----------------\n\n",  __func__);
 
-
-#ifdef SSO_TESTS_RUNNING_AS_UNTRUSTED
-    #define END_SERVICE_TEST_IF_UNTRUSTED  \
-        do {                                                    \
-            qDebug() << "\n\nRUNNING UNTRUSTED TEST CLIENT\n\n"; \
-            QVERIFY(m_serviceResult.m_error == Error::PermissionDenied);     \
-            QVERIFY(m_serviceResult.m_errMsg.contains(SIGNOND_PERMISSION_DENIED_ERR_STR)); \
-            TEST_DONE                                                                  \
-            return;                                                                    \
-        } while(0)
-
-    #define END_IDENTITY_TEST_IF_UNTRUSTED \
-        do {                                        \
-            qDebug() << "\n\nRUNNING UNTRUSTED TEST CLIENT\n\n"; \
-            qDebug() << QString("Code: %1, Msg: %2").arg(errCodeAsStr(m_identityResult.m_error)).arg(m_identityResult.m_errMsg); \
-            /* todo - remove first condition 1 moth after new err mgmnt release. */ \
-            QVERIFY(m_identityResult.m_error == Error::PermissionDenied);     \
-            QVERIFY(m_identityResult.m_errMsg.contains(SIGNOND_PERMISSION_DENIED_ERR_STR));  \
-            TEST_DONE                                                                    \
-            return;                                                                      \
-        } while(0)
-
-    // TODO - define this
-    #define END_SESSION_TEST_IF_UNTRUSTED  \
-        do {                                                    \
-            qDebug() << "\n\nRUNNING UNTRUSTED TEST CLIENT\n\n"; \
-            TEST_DONE                                           \
-            return;                                             \
-        } while(0)
-#else
-    #define END_SERVICE_TEST_IF_UNTRUSTED  \
-        do { qDebug() << "\n\nRUNNING TRUSTED TEST CLIENT\n\n"; } while(0)
-    #define END_IDENTITY_TEST_IF_UNTRUSTED \
-        do { qDebug() << "\n\nRUNNING TRUSTED TEST CLIENT\n\n"; } while(0)
-    #define CHECK_FOR_SESSION_ACCESS_CONTROL_ERROR  \
-        do { qDebug() << "\n\nRUNNING TRUSTED TEST CLIENT\n\n"; } while(0)
-#endif
-
-
-//Aegis Tokens for the queryAuthPluginACL test
-#define AEGIS_TOKEN_0 "token_0"
-#define AEGIS_TOKEN_1 "token_1"
-#define AEGIS_TOKEN_2 "libsignon-qt-tests::sso-encryption-token"
-#define AEGIS_TOKEN_3 "token_3"
-#define AEGIS_TOKEN_4 "token_4"
-#define AEGIS_TOKEN_5 "AID::com.nokia.maemo.libsignon-qt-tests.libsignon-qt-tests-id"
-
-#define TEST_AEGIS_TOKEN "libsignon-qt-tests::libsignon-qt-tests"
+// ACL Tokens for the queryAuthPluginACL test
+#define ACL_TOKEN_0 "token_0"
+#define ACL_TOKEN_1 "token_1"
+#define ACL_TOKEN_2 "libsignon-qt-tests::sso-encryption-token"
+#define ACL_TOKEN_3 "token_3"
+#define ACL_TOKEN_4 "token_4"
+#define ACL_TOKEN_5 "AID::com.nokia.maemo.libsignon-qt-tests.libsignon-qt-tests-id"
 
 SsoTestClient::SsoTestClient(SignOnUI *signOnUI, QObject *parent):
     QObject(parent),
@@ -201,7 +160,7 @@ void SsoTestClient::queryAvailableMetods()
                       "TEST_USERNAME_1",
                       methods);
     info.setSecret("TEST_PASSWORD_1");
-    info.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+    info.setAccessControlList(QStringList() << "*");
 
     if (!storeCredentialsPrivate(info))
         QFAIL("Failed to initialize test for querying available methods.");
@@ -231,8 +190,6 @@ void SsoTestClient::queryAvailableMetods()
     QVERIFY2(m_identityResult.m_responseReceived !=
              TestIdentityResult::InexistentResp,
              "A response was not received.");
-
-    END_IDENTITY_TEST_IF_UNTRUSTED;
 
     if (m_identityResult.m_responseReceived == TestIdentityResult::NormalResp) {
         qDebug() << "Remote:" << m_identityResult.m_methods;
@@ -279,8 +236,6 @@ void SsoTestClient::requestCredentialsUpdate()
              TestIdentityResult::InexistentResp,
              "A response was not received.");
 
-    END_IDENTITY_TEST_IF_UNTRUSTED;
-
     qDebug() << m_signOnUI->parameters();
     QVERIFY(m_identityResult.m_responseReceived ==
             TestIdentityResult::NormalResp);
@@ -311,7 +266,6 @@ void SsoTestClient::storeCredentials()
     }
 
     if (!testUpdatingCredentials()) {
-        END_IDENTITY_TEST_IF_UNTRUSTED;
         QFAIL("Updating existing credentials test failed.");
     }
 
@@ -332,7 +286,7 @@ void SsoTestClient::remove()
                       "TEST_USERNAME_1",
                       methods);
     info.setSecret("TEST_PASSWORD_1");
-    info.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+    info.setAccessControlList(QStringList() << "*");
 
     if (!storeCredentialsPrivate(info))
         QFAIL("Failed to initialize test for removing identity.");
@@ -360,8 +314,6 @@ void SsoTestClient::remove()
     QVERIFY2(m_identityResult.m_responseReceived !=
              TestIdentityResult::InexistentResp,
              "A response was not received.");
-
-    END_IDENTITY_TEST_IF_UNTRUSTED;
 
     if (m_identityResult.m_responseReceived == TestIdentityResult::NormalResp) {
         QVERIFY(m_identityResult.m_removed);
@@ -430,7 +382,7 @@ void SsoTestClient::removeStoreRemove()
                       "TEST_USERNAME_1",
                       methods);
     info.setSecret("TEST_PASSWORD_1");
-    info.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+    info.setAccessControlList(QStringList() << "*");
 
     if (!storeCredentialsPrivate(info))
         QFAIL("Failed to initialize test for removing identity.");
@@ -460,8 +412,6 @@ void SsoTestClient::removeStoreRemove()
     QVERIFY2(m_identityResult.m_responseReceived != TestIdentityResult::InexistentResp,
              "A response was not received.");
 
-    END_IDENTITY_TEST_IF_UNTRUSTED;
-
     if (m_identityResult.m_responseReceived == TestIdentityResult::NormalResp) {
         QVERIFY(m_identityResult.m_removed);
         m_identityResult.reset();
@@ -477,7 +427,7 @@ void SsoTestClient::removeStoreRemove()
                           "TEST_USERNAME_10",
                           methods);
         updateInfo.setSecret("TEST_PASSWORD_10");
-        updateInfo.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+        updateInfo.setAccessControlList(QStringList() << "*");
 
         m_identityResult.m_responseReceived = TestIdentityResult::InexistentResp;
         identity->storeCredentials(updateInfo);
@@ -562,7 +512,7 @@ void SsoTestClient::multipleRemove()
                       "TEST_USERNAME_1",
                       methods);
     info.setSecret("TEST_PASSWORD_1");
-    info.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+    info.setAccessControlList(QStringList() << "*");
 
     if (!storeCredentialsPrivate(info))
         QFAIL("Failed to initialize test for removing identity.");
@@ -590,8 +540,6 @@ void SsoTestClient::multipleRemove()
 
     QVERIFY2(m_identityResult.m_responseReceived != TestIdentityResult::InexistentResp,
              "A response was not received.");
-
-    END_IDENTITY_TEST_IF_UNTRUSTED;
 
     if (m_identityResult.m_responseReceived == TestIdentityResult::NormalResp) {
         QVERIFY(m_identityResult.m_removed);
@@ -627,7 +575,6 @@ void SsoTestClient::storeCredentialsWithoutAuthMethodsTest()
     }
 
     if (!testUpdatingCredentials()) {
-        END_IDENTITY_TEST_IF_UNTRUSTED;
         QFAIL("Updating existing credentials test failed.");
     }
 
@@ -648,7 +595,9 @@ void SsoTestClient::queryInfo()
                       methods);
     info.setSecret("TEST_PASSWORD_1");
     info.setRealms(QStringList() << "test_realm");
-    info.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+    QStringList acl;
+    acl << "*";
+    info.setAccessControlList(acl);
 
     if (!storeCredentialsPrivate(info))
         QFAIL("Failed to initialize test for querying info.");
@@ -679,7 +628,8 @@ void SsoTestClient::queryInfo()
              TestIdentityResult::InexistentResp,
              "A response was not received.");
 
-    END_IDENTITY_TEST_IF_UNTRUSTED;
+    QCOMPARE(m_identityResult.m_idInfo.isStoringSecret(), true);
+    QCOMPARE(m_identityResult.m_idInfo.accessControlList(), acl);
 
     if (m_identityResult.m_responseReceived == TestIdentityResult::NormalResp) {
         QVERIFY(m_identityResult.m_id == m_storedIdentityId);
@@ -711,7 +661,7 @@ void SsoTestClient::addReference()
                       methods);
     info.setSecret("TEST_PASSWORD_1");
     info.setRealms(QStringList() << "test_realm");
-    info.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+    info.setAccessControlList(QStringList() << "*");
 
     if (!storeCredentialsPrivate(info))
         QFAIL("Failed to initialize test for querying info.");
@@ -742,8 +692,6 @@ void SsoTestClient::addReference()
              TestIdentityResult::InexistentResp,
              "A response was not received.");
 
-    END_IDENTITY_TEST_IF_UNTRUSTED;
-
     if (m_identityResult.m_responseReceived == TestIdentityResult::NormalResp) {
         QVERIFY(m_identityResult.m_removed);
     } else {
@@ -770,7 +718,7 @@ void SsoTestClient::removeReference()
                       methods);
     info.setSecret("TEST_PASSWORD_1");
     info.setRealms(QStringList() << "test_realm");
-    info.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+    info.setAccessControlList(QStringList() << "*");
 
     if (!storeCredentialsPrivate(info))
         QFAIL("Failed to initialize test for querying info.");
@@ -802,8 +750,6 @@ void SsoTestClient::removeReference()
     QVERIFY2(m_identityResult.m_responseReceived != TestIdentityResult::InexistentResp,
              "A response was not received.");
 
-    END_IDENTITY_TEST_IF_UNTRUSTED;
-
     if (m_identityResult.m_responseReceived == TestIdentityResult::NormalResp) {
         QVERIFY(m_identityResult.m_removed);
     } else {
@@ -831,7 +777,7 @@ void SsoTestClient::verifyUser()
                       "TEST_USERNAME_1",
                       methods);
     info.setSecret(password);
-    info.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+    info.setAccessControlList(QStringList() << "*");
 
     if (!storeCredentialsPrivate(info))
         QFAIL("Failed to initialize test for verifying user.");
@@ -863,8 +809,6 @@ void SsoTestClient::verifyUser()
              TestIdentityResult::InexistentResp,
              "A response was not received.");
 
-    END_IDENTITY_TEST_IF_UNTRUSTED;
-
     QVERIFY(m_identityResult.m_responseReceived ==
             TestIdentityResult::NormalResp);
 
@@ -893,7 +837,7 @@ void SsoTestClient::verifySecret()
                       "TEST_USERNAME_1",
                       methods);
     info.setSecret("TEST_PASSWORD_1");
-    info.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+    info.setAccessControlList(QStringList() << "*");
 
     if (!storeCredentialsPrivate(info))
         QFAIL("Failed to initialize test for verifying secret.");
@@ -921,8 +865,6 @@ void SsoTestClient::verifySecret()
 
     QVERIFY2(m_identityResult.m_responseReceived != TestIdentityResult::InexistentResp,
              "A response was not received.");
-
-    END_IDENTITY_TEST_IF_UNTRUSTED;
 
     if (m_identityResult.m_responseReceived == TestIdentityResult::NormalResp)
     {
@@ -952,7 +894,7 @@ void SsoTestClient::signOut()
                       "TEST_USERNAME_1",
                       methods);
     info.setSecret("TEST_PASSWORD_1");
-    info.setAccessControlList(QStringList() << TEST_AEGIS_TOKEN);
+    info.setAccessControlList(QStringList() << "*");
 
     if (!storeCredentialsPrivate(info))
         QFAIL("Failed to initialize test for signing out.");
@@ -1016,8 +958,6 @@ void SsoTestClient::signOut()
 
     QVERIFY2(m_identityResult.m_responseReceived != TestIdentityResult::InexistentResp,
              "A response was not received.");
-
-    END_IDENTITY_TEST_IF_UNTRUSTED;
 
     QVERIFY2(identityResult1.m_responseReceived != TestIdentityResult::InexistentResp,
              "A response was not received.");
@@ -1263,8 +1203,6 @@ void SsoTestClient::queryIdentities()
     QVERIFY2(m_serviceResult.m_responseReceived != TestAuthServiceResult::InexistentResp,
              "A response was not received.");
 
-    END_SERVICE_TEST_IF_UNTRUSTED;
-
     if (m_serviceResult.m_responseReceived == TestAuthServiceResult::NormalResp)
     {
         QListIterator<IdentityInfo> it(m_serviceResult.m_identities);
@@ -1346,8 +1284,6 @@ void SsoTestClient::queryIdentitiesWithFilter()
     QVERIFY2(m_serviceResult.m_responseReceived != TestAuthServiceResult::InexistentResp,
              "A response was not received.");
 
-    END_SERVICE_TEST_IF_UNTRUSTED;
-
     if (m_serviceResult.m_responseReceived == TestAuthServiceResult::NormalResp)
     {
         QListIterator<IdentityInfo> it(m_serviceResult.m_identities);
@@ -1391,8 +1327,8 @@ void SsoTestClient::queryAuthPluginACL()
                       "test_username_1",
                       methods);
     info.setSecret("test_password_1");
-    info.setAccessControlList(QStringList() << AEGIS_TOKEN_0 << AEGIS_TOKEN_1 << AEGIS_TOKEN_2
-                                            << AEGIS_TOKEN_3 << AEGIS_TOKEN_4 << AEGIS_TOKEN_5);
+    info.setAccessControlList(QStringList() << ACL_TOKEN_0 << ACL_TOKEN_1 << ACL_TOKEN_2
+                                            << ACL_TOKEN_3 << ACL_TOKEN_4 << ACL_TOKEN_5);
 
     Identity *id = Identity::newIdentity(info, this);
 
@@ -1447,21 +1383,11 @@ void SsoTestClient::queryAuthPluginACL()
         loop.exec();
 
 
-    #ifndef SSO_TESTS_RUNNING_AS_UNTRUSTED
     QVERIFY(errorSpy.count() == 0);
     QVERIFY(responseSpy.count() == 1);
 
-    /* MeeGo: We are not yet using the MSSF manifest files to request the
-     * needed security tokens for the libsignon-qt-test binary (because the
-     * MSSF is not yet integrated with RPM/spec files).
-     * Therefore, the following checks would fail.
-     */
-#if 0
-    //AEGIS_TOKEN_5  is the only common token set between testclient and the tokens inserted in db
-    QVERIFY(m_tokenList.count() == 1);
-    QVERIFY(m_tokenList.contains(AEGIS_TOKEN_5));
-#endif
-    #endif
+    QCOMPARE(m_tokenList.count(), 6);
+    QVERIFY(m_tokenList.contains(ACL_TOKEN_5));
 
     TEST_DONE
 }
@@ -1498,8 +1424,6 @@ void SsoTestClient::clear()
 
     QVERIFY2(m_serviceResult.m_responseReceived != TestAuthServiceResult::InexistentResp,
              "A response was not received.");
-
-    END_SERVICE_TEST_IF_UNTRUSTED;
 
     if (m_serviceResult.m_responseReceived == TestAuthServiceResult::NormalResp) {
         connect(
@@ -1662,6 +1586,107 @@ bool SsoTestClient::testUpdatingCredentials(bool addMethods)
         return false;
     }
     return true;
+}
+
+void SsoTestClient::emptyPasswordRegression()
+{
+    TEST_START
+
+    m_identityResult.reset();
+
+    QString myPassword("My password");
+    //inserting some credentials
+    QMap<MethodName, MechanismsList> methods;
+    methods.insert("method1", QStringList() << "mech1" << "mech2");
+    methods.insert("method2", QStringList() << "mech1" << "mech2" << "mech3");
+    IdentityInfo info("TEST_CAPTION_1",
+                      "TEST_USERNAME_1",
+                      methods);
+    info.setSecret(myPassword);
+    info.setRealms(QStringList() << "test_realm");
+    QStringList acl;
+    acl << "*";
+    info.setAccessControlList(acl);
+
+    Identity *identity = Identity::newIdentity(info);
+
+    QEventLoop loop;
+
+    const char *errorSignature = SIGNAL(error(const SignOn::Error &));
+    QSignalSpy errorSignal(identity, errorSignature);
+    connect(identity, errorSignature, &loop, SLOT(quit()));
+
+    const char *credentialsStoredSignature =
+        SIGNAL(credentialsStored(const quint32));
+    QSignalSpy credentialsStoredSignal(identity, credentialsStoredSignature);
+    connect(identity, credentialsStoredSignature, &loop, SLOT(quit()));
+
+    identity->storeCredentials();
+
+    QTimer::singleShot(test_timeout, &loop, SLOT(quit()));
+    loop.exec();
+
+    QCOMPARE(errorSignal.count(), 0);
+    QCOMPARE(credentialsStoredSignal.count(), 1);
+    credentialsStoredSignal.clear();
+
+    /* Verify that the password is the one set by signon UI */
+    const char *secretVerifiedSignature = SIGNAL(secretVerified(const bool));
+    QSignalSpy secretVerifiedSignal(identity, secretVerifiedSignature);
+    connect(identity, secretVerifiedSignature, &loop, SLOT(quit()));
+
+    identity->verifySecret(myPassword);
+
+    QTimer::singleShot(test_timeout, &loop, SLOT(quit()));
+    loop.exec();
+
+    QCOMPARE(secretVerifiedSignal.count(), 1);
+    QCOMPARE(secretVerifiedSignal.at(0).at(0).toBool(), true);
+    secretVerifiedSignal.clear();
+
+    /* Now get the info, and re-store the identity */
+    const char *infoSignature = SIGNAL(info(const SignOn::IdentityInfo &));
+    connect(identity, infoSignature,
+            &m_identityResult, SLOT(info(const SignOn::IdentityInfo &)));
+    connect(identity, infoSignature, &loop, SLOT(quit()));
+
+    identity->queryInfo();
+
+    QTimer::singleShot(test_timeout, &loop, SLOT(quit()));
+    loop.exec();
+
+    QVERIFY2(m_identityResult.m_responseReceived !=
+             TestIdentityResult::InexistentResp,
+             "A response was not received.");
+    QCOMPARE(m_identityResult.m_idInfo.isStoringSecret(), true);
+    QCOMPARE(m_identityResult.m_idInfo.secret(), QString());
+
+    /* Write it back, and verify that the password doesn't change.
+     * Change the username to make sure that this is not a no-op. */
+    QString myUserName("Bob");
+    m_identityResult.m_idInfo.setUserName(myUserName);
+
+    identity->storeCredentials(m_identityResult.m_idInfo);
+
+    QTimer::singleShot(test_timeout, &loop, SLOT(quit()));
+    loop.exec();
+
+    /* check that the store succeeded */
+    QCOMPARE(errorSignal.count(), 0);
+    QCOMPARE(credentialsStoredSignal.count(), 1);
+    credentialsStoredSignal.clear();
+
+    identity->verifySecret(myPassword);
+
+    QTimer::singleShot(test_timeout, &loop, SLOT(quit()));
+    loop.exec();
+
+    QCOMPARE(secretVerifiedSignal.count(), 1);
+    QCOMPARE(secretVerifiedSignal.at(0).at(0).toBool(), true);
+
+    delete identity;
+
+    TEST_DONE
 }
 
 int main(int argc, char *argv[])

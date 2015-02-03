@@ -137,8 +137,9 @@ QVariantMap expandDBusArgumentValue(const QVariant &value, bool *success)
     // first, convert the QDBusArgument to a map
     QDBusArgument dbusValue = value.value<QDBusArgument>();
     QVariantMap converted;
-    if (dbusValue.currentType() == QDBusArgument::MapType) {
-        //Assume that all maps are a{sv}
+    if (dbusValue.currentType() == QDBusArgument::MapType &&
+        // We only care about a{sv}
+        dbusValue.currentSignature() == "a{sv}") {
         converted = qdbus_cast<QVariantMap>(dbusValue);
     } else {
         *success = false;
@@ -152,7 +153,7 @@ QVariantMap expandDBusArgumentValue(const QVariant &value, bool *success)
     for (i = converted.constBegin(); i != converted.constEnd(); ++i) {
         if (qstrcmp(i.value().typeName(), "QDBusArgument") == 0) {
             QVariantMap convertedValue = expandDBusArgumentValue(i.value(), success);
-            if (success == false) {
+            if (*success == false) {
                 //bail out to prevent error in serialization
                 return QVariantMap();
             }

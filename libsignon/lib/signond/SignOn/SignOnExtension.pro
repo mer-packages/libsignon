@@ -36,6 +36,9 @@ QT += core \
 QMAKE_CXXFLAGS += \
     -fvisibility=hidden
 
+# Error on undefined symbols
+QMAKE_LFLAGS += $$QMAKE_LFLAGS_NOUNDEF
+
 DEFINES += QT_NO_CAST_TO_ASCII QT_NO_CAST_FROM_ASCII
 DEFINES += \
     BUILDING_SIGNON \

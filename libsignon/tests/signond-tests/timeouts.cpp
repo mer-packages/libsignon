@@ -113,6 +113,15 @@ void TimeoutsTest::identityTimeout()
     /* After SSO_IDENTITY_TIMEOUT seconds, the identity must have been
      * destroyed */
     QVERIFY(!identityAlive(path));
+
+    /* Calling a method on the client should re-register the identity */
+    QSignalSpy removed(identity, SIGNAL(removed()));
+    QObject::connect(identity, SIGNAL(removed()),
+                     &loop, SLOT(quit()), Qt::QueuedConnection);
+    identity->remove();
+    loop.exec();
+
+    QCOMPARE(removed.count(), 1);
 }
 
 void TimeoutsTest::identityRegisterTwice()
@@ -228,3 +237,5 @@ void TimeoutsTest::credentialsStored(const quint32 id)
     QVERIFY(id != 0);
     emit finished();
 }
+
+QTEST_MAIN(TimeoutsTest)

@@ -2,6 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
+ * Copyright (C) 2013 Canonical Ltd.
  *
  * Contact: Aurel Popirtac <ext-aurel.popirtac@nokia.com>
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
@@ -24,7 +25,6 @@
 #define AUTHSERVICEIMPL_H
 
 #include <QObject>
-#include <QByteArray>
 #include <QList>
 #include <QMap>
 #include <QString>
@@ -32,8 +32,8 @@
 #include <QVariant>
 #include <QQueue>
 
+#include "async-dbus-proxy.h"
 #include "authservice.h"
-#include "dbusinterface.h"
 
 namespace SignOn {
 
@@ -65,20 +65,20 @@ public:
 
 public Q_SLOTS:
     void errorReply(const QDBusError &err);
-    void queryMechanismsReply(const QStringList &mechs);
-    void queryIdentitiesReply(const QDBusMessage &msg);
-    void queryMethodsReply(const QStringList &methods);
+    void queryMechanismsReply(QDBusPendingCallWatcher *call);
+    void queryMechanismsError(const QDBusError &err);
+    void queryIdentitiesReply(QDBusPendingCallWatcher *call);
+    void queryMethodsReply(QDBusPendingCallWatcher *call);
     void clearReply();
 
 private:
-    bool sendRequest(const QString &operation,
+    void sendRequest(const QString &operation,
                      const char *replySlot,
-                     const QList<QVariant> &args = QList<QVariant>(),
-                     int timeout = -1);
+                     const QList<QVariant> &args = QList<QVariant>());
 
 private:
     AuthService *m_parent;
-    DBusInterface *m_DBusInterface;
+    SignondAsyncDBusProxy m_dbusProxy;
     QQueue<QString> m_methodsForWhichMechsWereQueried;
 };
 
