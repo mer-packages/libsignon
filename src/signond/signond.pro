@@ -69,6 +69,11 @@ QMAKE_LIBDIR += \
     $${TOP_BUILD_DIR}/lib/plugins/signon-plugins-common \
     $${TOP_BUILD_DIR}/lib/signond/SignOn
 
+CONFIG(enable-p2p) {
+    DEFINES += ENABLE_P2P
+    PKGCONFIG += dbus-1
+}
+
 DEFINES += QT_NO_CAST_TO_ASCII \
     QT_NO_CAST_FROM_ASCII
 DEFINES += "SIGNOND_PLUGINS_DIR=$${SIGNOND_PLUGINS_DIR_QUOTED}"

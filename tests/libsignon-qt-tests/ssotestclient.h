@@ -70,6 +70,7 @@ private Q_SLOTS:
     void multipleRemove();
     void removeStoreRemove();
     void queryAuthPluginACL();
+    void emptyPasswordRegression();
 
 private:
     void clearDB();

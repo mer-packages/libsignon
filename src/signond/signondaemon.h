@@ -2,7 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
- * Copyright (C) 2012 Canonical Ltd.
+ * Copyright (C) 2012-2013 Canonical Ltd.
  *
  * Contact: Aurel Popirtac <ext-aurel.popirtac@nokia.com>
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
@@ -76,6 +76,7 @@ public:
 
     QString pluginsDir() const { return m_pluginsDir; }
     QString extensionsDir() const { return m_extensionsDir; }
+    QString busAddress() const { return m_busAddress; }
     uint daemonTimeout() const { return m_daemonTimeout; }
     uint identityTimeout() const { return m_identityTimeout; }
     uint authSessionTimeout() const { return m_authSessionTimeout; }
@@ -83,6 +84,7 @@ public:
 private:
     QString m_pluginsDir;
     QString m_extensionsDir;
+    QString m_busAddress;
 
     // storage configuration
     CAMConfiguration m_camConfiguration;
@@ -104,7 +106,6 @@ class SignonDaemon: public QObject, protected QDBusContext
 {
     Q_OBJECT
 
-    friend class SignonIdentity;
     friend class SignonSessionCore;
     friend class SignonDaemonAdaptor;
 
@@ -121,19 +122,26 @@ public:
     int identityTimeout() const;
     int authSessionTimeout() const;
 
-public Q_SLOTS:
-    /* Immediate reply calls */
-
-    void registerNewIdentity(QDBusObjectPath &objectPath);
-    void getIdentity(const quint32 id, QDBusObjectPath &objectPath,
-                     QVariantMap &identityData);
-    QString getAuthSessionObjectPath(const quint32 id, const QString type);
+public:
+    QObject *registerNewIdentity();
+    QObject *getIdentity(const quint32 id, QVariantMap &identityData);
+    QObject *getAuthSession(const quint32 id, const QString type,
+                            pid_t ownerPid);
 
     QStringList queryMethods();
     QStringList queryMechanisms(const QString &method);
     QList<QVariantMap> queryIdentities(const QVariantMap &filter);
     bool clear();
+
+    QString lastErrorName() const { return m_lastErrorName; }
+    QString lastErrorMessage() const { return m_lastErrorMessage; }
+    bool lastErrorIsValid() const { return !m_lastErrorName.isEmpty(); }
+
+private Q_SLOTS:
     void onDisconnected();
+    void onNewConnection(const QDBusConnection &connection);
+    void onIdentityStored(SignonIdentity *identity);
+    void onIdentityDestroyed();
 
 public Q_SLOTS: // backup METHODS
     uchar backupStarts();
@@ -147,7 +155,7 @@ private:
     void initExtension(const QString &filePath);
     bool initStorage();
 
-    void identityStored(SignonIdentity *identity);
+    void watchIdentity(SignonIdentity *identity);
     void setupSignalHandlers();
 
     void eraseBackupDir() const;
@@ -155,12 +163,14 @@ private:
     bool copyFromBackupDir(const QStringList &fileNames) const;
     bool createStorageFileTree(const QStringList &fileNames) const;
 
+    void setLastError(const QString &name, const QString &msg);
+    void clearLastError();
+
 private:
     /*
      * The list of created SignonIdentities
      * */
     QMap<quint32, SignonIdentity *> m_storedIdentities;
-    QMap<QString, SignonIdentity *> m_unstoredIdentities;
 
     SignonDaemonConfiguration *m_configuration;
 
@@ -173,6 +183,11 @@ private:
 
     int m_identityTimeout;
     int m_authSessionTimeout;
+
+    QDBusServer *m_dbusServer;
+
+    QString m_lastErrorName;
+    QString m_lastErrorMessage;
 
     /*
      * UNIX signals handling related

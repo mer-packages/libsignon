@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=com.nokia.SingleSignOn.Backup
-Exec=/usr/bin/signond -backup

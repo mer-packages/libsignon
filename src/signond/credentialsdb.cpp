@@ -26,6 +26,7 @@
 #include "credentialsdb.h"
 #include "credentialsdb_p.h"
 #include "signond-common.h"
+#include "signonidentityinfo.h"
 #include "signonsessioncoretools.h"
 
 #define INIT_ERROR() ErrorMonitor errorMonitor(this)
@@ -777,11 +778,19 @@ SignonIdentityInfo MetaDataDB::identity(const quint32 id)
     int refCount = 0;
     //TODO query for refcount
 
-    SignonIdentityInfo info =
-        SignonIdentityInfo(id, username, QString(), savePassword,
-                           caption, methods, realms, securityTokens,
-                           ownerTokens,
-                           type, refCount, validated);
+    SignonIdentityInfo info;
+    info.setId(id);
+    if (!isUserNameSecret)
+        info.setUserName(username);
+    info.setStorePassword(savePassword);
+    info.setCaption(caption);
+    info.setMethods(methods);
+    info.setRealms(realms);
+    info.setAccessControlList(securityTokens);
+    info.setOwnerList(ownerTokens);
+    info.setType(type);
+    info.setRefCount(refCount);
+    info.setValidated(validated);
     info.setUserNameSecret(isUserNameSecret);
     return info;
 }
@@ -1408,18 +1417,22 @@ quint32 CredentialsDB::updateCredentials(const SignonIdentityInfo &info)
     quint32 id = metaDataDB->updateIdentity(info);
     if (id == 0) return id;
 
-    QString password = info.password();
-    QString userName;
-    if (info.isUserNameSecret())
-        userName = info.userName();
+    if (info.hasSecrets()) {
+        QString password = info.password();
+        QString userName;
+        if (info.isUserNameSecret())
+            userName = info.userName();
 
-    if (info.storePassword() && isSecretsDBOpen()) {
-        secretsStorage->updateCredentials(id, userName, password);
-    } else {
-        /* Cache username and password in memory */
-        m_secretsCache->updateCredentials(id, userName, password,
-                                          info.storePassword());
+        if (info.storePassword() && isSecretsDBOpen()) {
+            secretsStorage->updateCredentials(id, userName, password);
+        } else {
+            /* Cache username and password in memory */
+            m_secretsCache->updateCredentials(id, userName, password,
+                                              info.storePassword());
+        }
     }
+
+    Q_EMIT credentialsUpdated(id);
 
     return id;
 }

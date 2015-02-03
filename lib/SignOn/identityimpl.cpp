@@ -2,6 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
+ * Copyright (C) 2013 Canonical Ltd.
  *
  * Contact: Aurel Popirtac <ext-aurel.popirtac@nokia.com>
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
@@ -24,6 +25,7 @@
 
 #include <QByteArray>
 #include <QDBusArgument>
+#include <QDBusPendingReply>
 #include <QTimer>
 
 #include "signond/signoncommon.h"
@@ -37,40 +39,41 @@
 
 #define SIGNOND_AUTH_SESSION_CANCEL_TIMEOUT 5000 //ms
 
-#define SIGNOND_IDENTITY_QUERY_AVAILABLE_METHODS_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("queryAvailableMethods()")
-#define SIGNOND_IDENTITY_REQUEST_CREDENTIALS_UPDATE_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("requestCredentialsUpdate(const QString &)")
-#define SIGNOND_IDENTITY_STORE_CREDENTIALS_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("storeCredentials(const IdentityInfo &)")
-#define SIGNOND_IDENTITY_REMOVE_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("remove()")
-#define SIGNOND_IDENTITY_QUERY_INFO_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("queryInfo()")
-#define SIGNOND_IDENTITY_ADD_REFERENCE_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("addReference(const QString &)")
-#define SIGNOND_IDENTITY_REMOVE_REFERENCE_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("removeReference(const QString &)")
-#define SIGNOND_IDENTITY_VERIFY_USER_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("verifyUser(const QVariantMap &)")
-#define SIGNOND_IDENTITY_VERIFY_SECRET_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("verifySecret(const QString &)")
-#define SIGNOND_IDENTITY_SIGN_OUT_METHOD \
-    SIGNOND_NORMALIZE_METHOD_SIGNATURE("signOut()")
+using namespace SignOn;
 
-namespace SignOn {
+/* Keep these aligned with the State enum */
+static const char *stateNames[] = {
+    "PendingRegistration",
+    "NeedsRegistration",
+    "NeedsUpdate",
+    "PendingUpdate",
+    "Removed",
+    "Ready",
+};
+
+static QString stateName(IdentityImpl::State state)
+{
+    return QLatin1String((state < IdentityImpl::LastState) ?
+                         stateNames[state] : "Unknown");
+}
 
 IdentityImpl::IdentityImpl(Identity *parent, const quint32 id):
     QObject(parent),
     m_parent(parent),
     m_identityInfo(new IdentityInfo),
-    m_operationQueueHandler(this),
+    m_dbusProxy(SIGNOND_IDENTITY_INTERFACE_C,
+                this),
     m_tmpIdentityInfo(NULL),
-    m_DBusInterface(NULL),
     m_state(NeedsRegistration),
     m_infoQueried(true),
+    m_methodsQueried(false),
     m_signOutRequestedByThisIdentity(false)
 {
+    m_dbusProxy.connect("infoUpdated", this, SLOT(infoUpdated(int)));
+    m_dbusProxy.connect("unregistered", this, SLOT(remoteObjectDestroyed()));
+    QObject::connect(&m_dbusProxy, SIGNAL(objectPathNeeded()),
+                     this, SLOT(sendRegisterRequest()));
+
     m_identityInfo->setId(id);
     sendRegisterRequest();
 }
@@ -90,23 +93,22 @@ IdentityImpl::~IdentityImpl()
 
 void IdentityImpl::updateState(State state)
 {
-    const char *stateStr;
+    TRACE() << "Updating state: " << stateName(state) << this;
+
+    m_state = state;
     switch (state)
     {
-    case PendingRegistration: stateStr = "PendingRegistration"; break;
-    case NeedsRegistration: stateStr = "NeedsRegistration"; break;
-    case NeedsUpdate: stateStr = "NeedsUpdate"; break;
-    case Ready: stateStr = "Ready"; break;
-    case Removed: stateStr = "Removed"; break;
-    default: stateStr = "Unknown"; break;
+    case NeedsUpdate:
+        updateContents();
+        break;
+    default:
+        break;
     }
-    TRACE() << "Updating state: " << stateStr;
-    m_state = state;
 }
 
 void IdentityImpl::copyInfo(const IdentityInfo &info)
 {
-    m_identityInfo->impl->copy(*(info.impl));
+    *m_identityInfo->impl = *info.impl;
 }
 
 quint32 IdentityImpl::id() const
@@ -141,145 +143,55 @@ void IdentityImpl::destroySession(AuthSession *session)
 void IdentityImpl::queryAvailableMethods()
 {
     TRACE() << "Querying available identity authentication methods.";
-    checkConnection();
+    if (!checkRemoved()) return;
 
-    switch (m_state) {
-    case NeedsRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                            SIGNOND_IDENTITY_QUERY_AVAILABLE_METHODS_METHOD);
-        sendRegisterRequest();
-        break;
-    case PendingRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                            SIGNOND_IDENTITY_QUERY_AVAILABLE_METHODS_METHOD);
-        break;
-    case NeedsUpdate:
-        m_operationQueueHandler.enqueueOperation(
-                            SIGNOND_IDENTITY_QUERY_AVAILABLE_METHODS_METHOD);
-
-        /* This flag tells the queryInfo() reply slot that the current query
-           should not reply with the 'info()' signal */
-        m_infoQueried = false;
-        updateContents();
-        break;
-    case Removed:
-        emit m_parent->error(Error(Error::IdentityNotFound,
-                             QLatin1String("Removed from database.")));
-        return;
-    case Ready:
-        /* fall trough */
-    default:
+    if (m_state == Ready) {
         emit m_parent->methodsAvailable(m_identityInfo->methods());
+        return;
     }
+
+    m_methodsQueried = true;
+    updateContents();
 }
 
 void IdentityImpl::requestCredentialsUpdate(const QString &message)
 {
     TRACE() << "Requesting credentials update.";
-    checkConnection();
+    if (!checkRemoved()) return;
 
-    switch (m_state) {
-    case NeedsRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                        SIGNOND_IDENTITY_REQUEST_CREDENTIALS_UPDATE_METHOD,
-                        QList<QGenericArgument *>() <<
-                        (new Q_ARG(QString, message)));
-        sendRegisterRequest();
-        return;
-    case PendingRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                        SIGNOND_IDENTITY_REQUEST_CREDENTIALS_UPDATE_METHOD,
-                        QList<QGenericArgument *>() <<
-                        (new Q_ARG(QString, message)));
-        return;
-    case NeedsUpdate:
-        break;
-    case Removed:
-        emit m_parent->error(
-                Error(Error::IdentityNotFound,
-                      QLatin1String("Removed from database.")));
-        return;
-    case Ready:
-        /* fall trough */
-    default:
-        break;
-    }
-
-    QList<QVariant> args;
+    QVariantList args;
     args << message;
-    bool result = sendRequest(__func__, args,
-                              SLOT(storeCredentialsReply(const quint32)),
-                              SIGNOND_MAX_TIMEOUT);
-    if (!result) {
-        TRACE() << "Error occurred.";
-        emit m_parent->error(
-                Error(Error::InternalCommunication,
-                      SIGNOND_INTERNAL_COMMUNICATION_ERR_STR));
-    }
+    m_dbusProxy.queueCall(QLatin1String("requestCredentialsUpdate"),
+                          args,
+                          SLOT(storeCredentialsReply(QDBusPendingCallWatcher*)),
+                          SLOT(errorReply(const QDBusError&)));
 }
 
 void IdentityImpl::storeCredentials(const IdentityInfo &info)
 {
     TRACE() << "Storing credentials";
-    checkConnection();
 
-    switch (m_state) {
-    case Removed:
+    if (m_state == Removed) {
         updateState(NeedsRegistration);
-        // --Fallthrough-here--
-    case NeedsRegistration:
-        {
-        IdentityInfo localInfo =
-            info.impl->isEmpty() ?
-            *m_identityInfo : *(m_tmpIdentityInfo = new IdentityInfo(info));
-
-        m_operationQueueHandler.enqueueOperation(
-                                SIGNOND_IDENTITY_STORE_CREDENTIALS_METHOD,
-                                QList<QGenericArgument *>() <<
-                                (new Q_ARG(SignOn::IdentityInfo, localInfo)));
-        sendRegisterRequest();
-        return;
-        }
-    case PendingRegistration:
-        {
-        IdentityInfo localInfo =
-            info.impl->isEmpty() ?
-            *m_identityInfo : *(m_tmpIdentityInfo = new IdentityInfo(info));
-        m_operationQueueHandler.enqueueOperation(
-                                SIGNOND_IDENTITY_STORE_CREDENTIALS_METHOD,
-                                QList<QGenericArgument *>() <<
-                                (new Q_ARG(SignOn::IdentityInfo, localInfo)));
-        return;
-        }
-    case NeedsUpdate:
-        break;
-    case Ready:
-        /* fall trough */
-    default:
-        break;
     }
 
-    if (info.impl->isEmpty()) {
+    const IdentityInfo *localInfo = info.impl->isEmpty() ? m_identityInfo : &info;
+
+    if (localInfo->impl->isEmpty()) {
         emit m_parent->error(
             Error(Error::StoreFailed,
                   QLatin1String("Invalid Identity data.")));
         return;
     }
 
-    QList<QVariant> args;
-    QVariantMap map = info.impl->toMap();
+    QVariantList args;
+    QVariantMap map = localInfo->impl->toMap();
     map.insert(SIGNOND_IDENTITY_INFO_ID, m_identityInfo->id());
-    map.insert(SIGNOND_IDENTITY_INFO_SECRET, info.secret());
     args << map;
 
-    bool result = sendRequest("store", args,
-                              SLOT(storeCredentialsReply(const quint32)));
-    if (!result) {
-        TRACE() << "Error occurred.";
-        emit m_parent->error(
-                Error(Error::InternalCommunication,
-                      SIGNOND_INTERNAL_COMMUNICATION_ERR_STR));
-    }
+    m_dbusProxy.queueCall(QLatin1String("store"), args,
+                          SLOT(storeCredentialsReply(QDBusPendingCallWatcher*)),
+                          SLOT(errorReply(const QDBusError&)));
 }
 
 void IdentityImpl::remove()
@@ -292,39 +204,10 @@ void IdentityImpl::remove()
      */
 
     if (id() != SIGNOND_NEW_IDENTITY) {
-        checkConnection();
-
-        switch (m_state) {
-        case NeedsRegistration:
-            m_operationQueueHandler.enqueueOperation(
-                                                SIGNOND_IDENTITY_REMOVE_METHOD);
-            sendRegisterRequest();
-            return;
-        case PendingRegistration:
-            m_operationQueueHandler.enqueueOperation(
-                                                SIGNOND_IDENTITY_REMOVE_METHOD);
-            return;
-        case Removed:
-            emit m_parent->error(
-                    Error(Error::IdentityNotFound,
-                          QLatin1String("Already removed from database.")));
-            return;
-        case NeedsUpdate:
-            break;
-        case Ready:
-        /* fall trough */
-        default:
-            break;
-        }
-
-        bool result = sendRequest(__func__, QList<QVariant>(),
-                                  SLOT(removeReply()));
-        if (!result) {
-            TRACE() << "Error occurred.";
-            emit m_parent->error(
-                    Error(Error::InternalCommunication,
-                          SIGNOND_INTERNAL_COMMUNICATION_ERR_STR));
-        }
+        m_dbusProxy.queueCall(QLatin1String("remove"),
+                              QVariantList(),
+                              SLOT(removeReply()),
+                              SLOT(errorReply(const QDBusError&)));
     } else {
         emit m_parent->error(Error(Error::IdentityNotFound,
                                    QLatin1String("Remove request failed. The "
@@ -335,116 +218,37 @@ void IdentityImpl::remove()
 void IdentityImpl::addReference(const QString &reference)
 {
     TRACE() << "Adding reference to identity";
-    checkConnection();
+    if (!checkRemoved()) return;
 
-    switch (m_state) {
-    case NeedsRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                        SIGNOND_IDENTITY_ADD_REFERENCE_METHOD,
-                        QList<QGenericArgument *>() <<
-                        (new Q_ARG(QString, reference)));
-        sendRegisterRequest();
-        return;
-    case PendingRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                        SIGNOND_IDENTITY_ADD_REFERENCE_METHOD,
-                        QList<QGenericArgument *>() <<
-                        (new Q_ARG(QString, reference)));
-        return;
-    case NeedsUpdate:
-        break;
-    case Removed:
-        emit m_parent->error(
-                Error(Error::IdentityNotFound,
-                      QLatin1String("Removed from database.")));
-        return;
-    case Ready:
-        /* fall trough */
-    default:
-        break;
-    }
-
-    bool result = sendRequest(__func__, QList<QVariant>() << QVariant(reference),
-                              SLOT(addReferenceReply()));
-    if (!result) {
-        TRACE() << "Error occurred.";
-        emit m_parent->error(
-                Error(Error::InternalCommunication,
-                      SIGNOND_INTERNAL_COMMUNICATION_ERR_STR));
-    }
+    m_dbusProxy.queueCall(QLatin1String("addReference"),
+                          QVariantList() << QVariant(reference),
+                          SLOT(addReferenceReply()),
+                          SLOT(errorReply(const QDBusError&)));
 }
 
 void IdentityImpl::removeReference(const QString &reference)
 {
     TRACE() << "Removing reference from identity";
-    checkConnection();
+    if (!checkRemoved()) return;
 
-    switch (m_state) {
-    case NeedsRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                        SIGNOND_IDENTITY_REMOVE_REFERENCE_METHOD,
-                        QList<QGenericArgument *>() <<
-                        (new Q_ARG(QString, reference)));
-        sendRegisterRequest();
-        return;
-    case PendingRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                        SIGNOND_IDENTITY_REMOVE_REFERENCE_METHOD,
-                        QList<QGenericArgument *>() <<
-                        (new Q_ARG(QString, reference)));
-        return;
-    case NeedsUpdate:
-        break;
-    case Removed:
-        emit m_parent->error(Error(Error::IdentityNotFound,
-                                   QLatin1String("Removed from database.")));
-        return;
-    case Ready:
-        /* fall trough */
-    default:
-        break;
-    }
-
-    bool result = sendRequest(__func__, QList<QVariant>() << QVariant(reference),
-                              SLOT(removeReferenceReply()));
-    if (!result) {
-        TRACE() << "Error occurred.";
-        emit m_parent->error(
-                Error(Error::InternalCommunication,
-                      SIGNOND_INTERNAL_COMMUNICATION_ERR_STR));
-    }
+    m_dbusProxy.queueCall(QLatin1String("removeReference"),
+                          QVariantList() << QVariant(reference),
+                          SLOT(removeReferenceReply()),
+                          SLOT(errorReply(const QDBusError&)));
 }
 
 void IdentityImpl::queryInfo()
 {
     TRACE() << "Querying info.";
-    checkConnection();
+    if (!checkRemoved()) return;
 
-    switch (m_state) {
-    case NeedsRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                                            SIGNOND_IDENTITY_QUERY_INFO_METHOD);
-        sendRegisterRequest();
-        return;
-    case PendingRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                                            SIGNOND_IDENTITY_QUERY_INFO_METHOD);
-        return;
-    case Removed:
-        emit m_parent->error(
-                Error(Error::IdentityNotFound,
-                      QLatin1String("Removed from database.")));
-        return;
-    case NeedsUpdate:
-        m_infoQueried = true;
-        updateContents();
-        break;
-    case Ready:
+    if (m_state == Ready) {
         emit m_parent->info(IdentityInfo(*m_identityInfo));
         return;
-    default:
-        break;
     }
+
+    m_infoQueried = true;
+    updateContents();
 }
 
 void IdentityImpl::verifyUser(const QString &message)
@@ -457,125 +261,40 @@ void IdentityImpl::verifyUser(const QString &message)
 void IdentityImpl::verifyUser(const QVariantMap &params)
 {
     TRACE() << "Verifying user.";
-    checkConnection();
+    if (!checkRemoved()) return;
 
-    switch (m_state) {
-    case NeedsRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                                SIGNOND_IDENTITY_VERIFY_USER_METHOD,
-                                QList<QGenericArgument *>() <<
-                                (new Q_ARG(QVariantMap, params)));
-        sendRegisterRequest();
-        return;
-    case PendingRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                                SIGNOND_IDENTITY_VERIFY_USER_METHOD,
-                                QList<QGenericArgument *>() <<
-                                (new Q_ARG(QVariantMap, params)));
-        return;
-    case Removed:
-        emit m_parent->error(
-                Error(Error::IdentityNotFound,
-                      QLatin1String("Removed from database.")));
-        return;
-    case NeedsUpdate:
-        break;
-    case Ready:
-        /* fall trough */
-    default:
-        break;
-    }
-
-    bool result = sendRequest(__func__, QList<QVariant>() << params,
-                              SLOT(verifyUserReply(const bool)),
-                              SIGNOND_MAX_TIMEOUT);
-    if (!result) {
-        TRACE() << "Error occurred.";
-        emit m_parent->error(
-                Error(Error::InternalCommunication,
-                      SIGNOND_INTERNAL_COMMUNICATION_ERR_STR));
-    }
+    m_dbusProxy.queueCall(QLatin1String("verifyUser"),
+                          QVariantList() << params,
+                          SLOT(verifyUserReply(QDBusPendingCallWatcher*)),
+                          SLOT(errorReply(const QDBusError&)));
 }
 
 void IdentityImpl::verifySecret(const QString &secret)
 {
     TRACE();
-    checkConnection();
+    if (!checkRemoved()) return;
 
-    switch (m_state) {
-    case NeedsRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                                SIGNOND_IDENTITY_VERIFY_SECRET_METHOD,
-                                QList<QGenericArgument *>() <<
-                                (new Q_ARG(QString, secret)));
-        sendRegisterRequest();
-        return;
-    case PendingRegistration:
-        m_operationQueueHandler.enqueueOperation(
-                                SIGNOND_IDENTITY_VERIFY_SECRET_METHOD,
-                                QList<QGenericArgument *>() <<
-                                (new Q_ARG(QString, secret)));
-        return;
-    case Removed:
-        emit m_parent->error(Error(Error::IdentityNotFound,
-                                   QLatin1String("Removed from database.")));
-        return;
-    case NeedsUpdate:
-        break;
-    case Ready:
-        /* fall trough */
-    default:
-        break;
-    }
-
-    bool result = sendRequest(__func__, QList<QVariant>() << QVariant(secret),
-                              SLOT(verifySecretReply(const bool)));
-    if (!result) {
-        TRACE() << "Error occurred.";
-        emit m_parent->error(Error(Error::InternalCommunication,
-                                   SIGNOND_INTERNAL_COMMUNICATION_ERR_STR));
-    }
+    m_dbusProxy.queueCall(QLatin1String("verifySecret"),
+                          QVariantList() << QVariant(secret),
+                          SLOT(verifySecretReply(QDBusPendingCallWatcher*)),
+                          SLOT(errorReply(const QDBusError&)));
 }
 
 void IdentityImpl::signOut()
 {
     TRACE() << "Signing out.";
-    checkConnection();
+    if (!checkRemoved()) return;
 
     /* if this is a stored identity, inform server about signing out
        so that other client identity objects having the same id will
        be able to perform the operation.
     */
     if (id() != SIGNOND_NEW_IDENTITY) {
-        switch (m_state) {
-        case NeedsRegistration:
-            m_operationQueueHandler.enqueueOperation(
-                                              SIGNOND_IDENTITY_SIGN_OUT_METHOD);
-            sendRegisterRequest();
-            return;
-        case PendingRegistration:
-            m_operationQueueHandler.enqueueOperation(
-                                              SIGNOND_IDENTITY_SIGN_OUT_METHOD);
-            return;
-        case Removed:
-            break;
-        case NeedsUpdate:
-            break;
-        case Ready:
-            break;
-        default:
-            break;
-        }
-
-        bool result = sendRequest(__func__, QList<QVariant>(),
-                                  SLOT(signOutReply()));
-        if (!result) {
-            TRACE() << "Error occurred.";
-            emit m_parent->error(Error(Error::InternalCommunication,
-                                       SIGNOND_INTERNAL_COMMUNICATION_ERR_STR));
-        } else {
-            m_signOutRequestedByThisIdentity = true;
-        }
+        m_dbusProxy.queueCall(QLatin1String("signOut"),
+                              QVariantList(),
+                              SLOT(signOutReply()),
+                              SLOT(errorReply(const QDBusError&)));
+        m_signOutRequestedByThisIdentity = true;
     }
 
     clearAuthSessionsCache();
@@ -619,8 +338,10 @@ void IdentityImpl::authSessionCancelReply(const SignOn::Error &err)
     }
 }
 
-void IdentityImpl::storeCredentialsReply(const quint32 id)
+void IdentityImpl::storeCredentialsReply(QDBusPendingCallWatcher *call)
 {
+    QDBusPendingReply<quint32> reply = *call;
+    quint32 id = reply.argumentAt<0>();
     TRACE() << "stored id:" << id << "old id:" << this->id();
     if (m_tmpIdentityInfo) {
         *m_identityInfo = *m_tmpIdentityInfo;
@@ -653,26 +374,36 @@ void IdentityImpl::removeReferenceReply()
     emit m_parent->referenceRemoved();
 }
 
-void IdentityImpl::getInfoReply(const QVariantMap &infoData)
+void IdentityImpl::getInfoReply(QDBusPendingCallWatcher *call)
 {
+    QDBusPendingReply<QVariantMap> reply = *call;
+    QVariantMap infoData = reply.argumentAt<0>();
+    TRACE() << infoData;
     updateCachedData(infoData);
     updateState(Ready);
 
-    if (m_infoQueried)
-        emit m_parent->info(IdentityInfo(*m_identityInfo));
-    else
-        emit m_parent->methodsAvailable(m_identityInfo->methods());
+    if (m_infoQueried) {
+        Q_EMIT m_parent->info(IdentityInfo(*m_identityInfo));
+        m_infoQueried = false;
+    }
 
-    m_infoQueried = true;
+    if (m_methodsQueried) {
+        Q_EMIT m_parent->methodsAvailable(m_identityInfo->methods());
+        m_methodsQueried = false;
+    }
 }
 
-void IdentityImpl::verifyUserReply(const bool valid)
+void IdentityImpl::verifyUserReply(QDBusPendingCallWatcher *call)
 {
+    QDBusPendingReply<bool> reply = *call;
+    bool valid = reply.argumentAt<0>();
     emit m_parent->userVerified(valid);
 }
 
-void IdentityImpl::verifySecretReply(const bool valid)
+void IdentityImpl::verifySecretReply(QDBusPendingCallWatcher *call)
 {
+    QDBusPendingReply<bool> reply = *call;
+    bool valid = reply.argumentAt<0>();
     emit m_parent->secretVerified(valid);
 }
 
@@ -781,72 +512,36 @@ void IdentityImpl::errorReply(const QDBusError& err)
 
 void IdentityImpl::updateContents()
 {
-    bool result = sendRequest("getInfo", QList<QVariant>(),
-                              SLOT(getInfoReply(const QVariantMap &)));
-
-    if (!result) {
-        TRACE() << "Error occurred.";
-        emit m_parent->error(Error(Error::InternalCommunication,
-                                   SIGNOND_INTERNAL_COMMUNICATION_ERR_STR));
-    }
-}
-
-bool IdentityImpl::sendRequest(const char *remoteMethod, const QList<QVariant> &args, const char *replySlot, int timeout)
-{
-    TRACE();
-    QDBusMessage msg =
-        QDBusMessage::createMethodCall(m_DBusInterface->service(),
-                                       m_DBusInterface->path(),
-                                       m_DBusInterface->interface(),
-                                       QLatin1String(remoteMethod));
-    msg.setArguments(args);
-    msg.setDelayedReply(true);
-    return m_DBusInterface->connection().
-        callWithCallback(msg, this, replySlot,
-                         SLOT(errorReply(const QDBusError&)),
-                         timeout);
+    m_dbusProxy.queueCall(QLatin1String("getInfo"),
+                          QVariantList(),
+                          SLOT(getInfoReply(QDBusPendingCallWatcher*)),
+                          SLOT(errorReply(const QDBusError&)));
+    updateState(PendingUpdate);
 }
 
 bool IdentityImpl::sendRegisterRequest()
 {
-    QList<QVariant> args;
+    if (m_state == PendingRegistration) return true;
+
+    QVariantList args;
     QString registerMethodName = QLatin1String("registerNewIdentity");
-    QByteArray registerReplyMethodName =
-        SLOT(registerReply(const QDBusObjectPath &));
 
     if (id() != SIGNOND_NEW_IDENTITY) {
         registerMethodName = QLatin1String("getIdentity");
         args << m_identityInfo->id();
-        registerReplyMethodName =
-            SLOT(registerReply(const QDBusObjectPath &, const QVariantMap &));
     }
 
-    QDBusMessage registerCall = QDBusMessage::createMethodCall(
-        SIGNOND_SERVICE,
-        SIGNOND_DAEMON_OBJECTPATH,
-        SIGNOND_DAEMON_INTERFACE,
-        registerMethodName);
+    SignondAsyncDBusProxy *authService =
+        new SignondAsyncDBusProxy(SIGNOND_DAEMON_INTERFACE_C, this);
+    authService->setObjectPath(QDBusObjectPath(SIGNOND_DAEMON_OBJECTPATH));
 
-    if (!args.isEmpty())
-        registerCall.setArguments(args);
-
-    registerCall.setDelayedReply(true);
-
-    bool registrationRequested = SIGNOND_BUS.callWithCallback(
-        registerCall,
-        this,
-        registerReplyMethodName.data(),
-        SLOT(errorReply(const QDBusError&)));
-
-    if (!registrationRequested) {
-        QDBusError err = SIGNOND_BUS.lastError();
-        TRACE() << "\nError name:" << err.name()
-                << "\nMessage: " << err.message()
-                << "\nType: " << QDBusError::errorString(err.type());
-        m_operationQueueHandler.clearOperationsQueue();
-        updateState(NeedsRegistration);
-        return false;
-    }
+    PendingCall *call =
+        authService->queueCall(registerMethodName,
+                               args,
+                               SLOT(registerReply(QDBusPendingCallWatcher*)),
+                               SLOT(errorReply(const QDBusError&)));
+    QObject::connect(call, SIGNAL(finished(QDBusPendingCallWatcher*)),
+                     this, SLOT(deleteServiceProxy()));
     updateState(PendingRegistration);
     return true;
 }
@@ -856,66 +551,39 @@ void IdentityImpl::updateCachedData(const QVariantMap &infoData)
     m_identityInfo->impl->updateFromMap(infoData);
 }
 
-void IdentityImpl::checkConnection()
+void IdentityImpl::registerReply(QDBusPendingCallWatcher *call)
 {
-    if (m_state == PendingRegistration || m_state == NeedsRegistration)
-        return;
-
-    if (!m_DBusInterface
-        || !m_DBusInterface->isValid()
-        || m_DBusInterface->lastError().isValid())
-    {
-        updateState(NeedsRegistration);
-        m_operationQueueHandler.stopOperationsProcessing();
-    }
-}
-
-void IdentityImpl::registerReply(const QDBusObjectPath &objectPath)
-{
-    registerReply(objectPath, QVariantMap());
-}
-
-void IdentityImpl::registerReply(const QDBusObjectPath &objectPath,
-                                 const QVariantMap &infoData)
-{
-    m_DBusInterface = new DBusInterface(SIGNOND_SERVICE,
-                                        objectPath.path(),
-                                        SIGNOND_IDENTITY_INTERFACE_C,
-                                        SIGNOND_BUS,
-                                        this);
-    if (!m_DBusInterface->isValid()) {
-        TRACE() << "The interface cannot be registered!!! " <<
-            m_DBusInterface->lastError();
-        updateState(NeedsRegistration);
-
-        delete m_DBusInterface;
-        m_DBusInterface = NULL;
-
-        int count = m_operationQueueHandler.queuedOperationsCount();
-        for (int i = 0; i < count; ++i) {
-            emit m_parent->error(
-                    Error(Error::Unknown,
-                          QLatin1String("Could not establish valid "
-                                        "connection to remote object.")));
-        }
-        return;
+    QVariantList arguments = call->reply().arguments();
+    if (arguments.count() > 1) {
+        QDBusArgument info = arguments.at(1).value<QDBusArgument>();
+        updateCachedData(qdbus_cast<QVariantMap>(info));
     }
 
-    m_DBusInterface->connect("infoUpdated", this, SLOT(infoUpdated(int)));
-    m_DBusInterface->connect("unregistered", this,
-                             SLOT(removeObjectDestroyed()));
-
-    if (!infoData.empty())
-        updateCachedData(infoData);
-
+    m_dbusProxy.setObjectPath(arguments.at(0).value<QDBusObjectPath>());
     updateState(Ready);
-    if (m_operationQueueHandler.queuedOperationsCount() > 0)
-        m_operationQueueHandler.execQueuedOperations();
 }
 
-void IdentityImpl::removeObjectDestroyed()
+void IdentityImpl::deleteServiceProxy()
 {
+    PendingCall *call = qobject_cast<PendingCall*>(sender());
+    /* This destroys the AsyncDBusProxy which we created just for registering
+     * the identity. */
+    call->parent()->deleteLater();
+}
+
+void IdentityImpl::remoteObjectDestroyed()
+{
+    TRACE();
+    m_dbusProxy.setObjectPath(QDBusObjectPath());
     updateState(NeedsRegistration);
 }
 
-} //namespace SignOn
+bool IdentityImpl::checkRemoved()
+{
+    if (m_state == Removed) {
+        Q_EMIT m_parent->error(Error(Error::IdentityNotFound,
+                                     QLatin1String("Removed from database.")));
+        return false;
+    }
+    return true;
+}

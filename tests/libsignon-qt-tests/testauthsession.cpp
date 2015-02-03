@@ -2,6 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
+ * Copyright (C) 2013 Canonical Ltd.
  *
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
  *
@@ -24,6 +25,7 @@
 #include "testauthsession.h"
 #include "testthread.h"
 #include "SignOn/identity.h"
+#include <QDBusInterface>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -172,7 +174,7 @@ void TestAuthSession::queryMechanisms_existing_method()
      QSignalSpy stateCounter(as, SIGNAL(stateChanged(AuthSession::AuthSessionState, const QString&)));
      QEventLoop loop;
 
-     QObject::connect(as, SIGNAL(response(const SignOn::SessionData &)), &loop, SLOT(quit()));
+     QObject::connect(as, SIGNAL(response(const SignOn::SessionData &)), &loop, SLOT(quit()), Qt::QueuedConnection);
      QObject::connect(as, SIGNAL(error(const SignOn::Error &)), &loop, SLOT(quit()));
      QTimer::singleShot(10*1000, &loop, SLOT(quit()));
 
@@ -312,7 +314,7 @@ void TestAuthSession::queryMechanisms_existing_method()
 
      QCOMPARE(spyResponse.count(), 0);
      QCOMPARE(spyError.count(), 4);
-     QCOMPARE(stateCounter.count(), 0);
+     QVERIFY(stateCounter.count() <= 4);
  }
 
 
@@ -623,7 +625,51 @@ void TestAuthSession::process_with_big_session_data()
     QCOMPARE(g_bigStringReplySize, g_bigStringSize);
 }
 
-void TestAuthSession::cancel_immidiately()
+void TestAuthSession::process_after_timeout()
+{
+    AuthSession *as;
+    SSO_TEST_CREATE_AUTH_SESSION(as, "ssotest");
+
+    QSignalSpy spyResponse(as, SIGNAL(response(const SignOn::SessionData&)));
+    QSignalSpy spyError(as, SIGNAL(error(const SignOn::Error &)));
+    QEventLoop loop;
+
+    QObject::connect(as, SIGNAL(response(const SignOn::SessionData&)),
+                     &loop, SLOT(quit()));
+    QTimer::singleShot(20*1000, &loop, SLOT(quit()));
+
+    SessionData inData;
+
+    inData.setSecret("testSecret");
+    inData.setUserName("testUsername");
+
+    as->process(inData, "mech1");
+
+    loop.exec();
+
+    QCOMPARE(spyResponse.count(), 1);
+    QCOMPARE(spyError.count(), 0);
+    spyResponse.clear();
+
+    // Wait for auto-destruction of the remote object
+    QTest::qWait(6000);
+
+    /* Create an authsession just to trigger the actual destruction of the
+     * first. */
+    AuthSession *as2;
+    SSO_TEST_CREATE_AUTH_SESSION(as2, "ssotest");
+    Q_UNUSED(as2);
+
+    // Try processing again
+    as->process(inData, "mech1");
+
+    loop.exec();
+
+    QCOMPARE(spyResponse.count(), 1);
+    QCOMPARE(spyError.count(), 0);
+}
+
+void TestAuthSession::cancel_immediately()
 {
     AuthSession *as;
     SSO_TEST_CREATE_AUTH_SESSION(as, "ssotest");

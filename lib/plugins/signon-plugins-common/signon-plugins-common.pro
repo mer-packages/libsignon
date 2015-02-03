@@ -6,6 +6,7 @@ include($${TOP_SRC_DIR}/common-installs-config.pri)
 include($${TOP_SRC_DIR}/common-vars.pri)
 
 CONFIG += qt
+QT += dbus
 
 INCLUDEPATH += ../
 
@@ -22,12 +23,6 @@ headers.files = \
 
 headers.path = $${INSTALL_PREFIX}/include/signon-plugins/SignOn
 INSTALLS += headers
-
-greaterThan(QT_MAJOR_VERSION, 4) {
-    LIBQTCORE = Qt5Core
-} else {
-    LIBQTCORE = QtCore
-}
 
 pkgconfig.files = signon-plugins-common.pc
 include($${TOP_SRC_DIR}/common-pkgconfig.pri)

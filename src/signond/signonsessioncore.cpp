@@ -356,9 +356,11 @@ void SignonSessionCore::startProcess()
             QStringList paramsTokenList;
             QStringList identityAclList = info.accessControlList();
 
-            foreach(QString acl, identityAclList)
-                if (AccessControlManagerHelper::instance()->isPeerAllowedToAccess(data.m_msg, acl))
+            foreach(QString acl, identityAclList) {
+                if (AccessControlManagerHelper::instance()->
+                    isPeerAllowedToAccess(data.m_conn, data.m_msg, acl))
                     paramsTokenList.append(acl);
+            }
 
             if (!paramsTokenList.isEmpty()) {
                 parameters[SSO_ACCESS_CONTROL_TOKENS] = paramsTokenList;
@@ -925,7 +927,10 @@ void SignonSessionCore::destroy()
     else
         sessionsOfNonStoredCredentials.removeOne(this);
 
-    emit destroyed();
+    QObjectList authSessions;
+    while (authSessions = children(), !authSessions.isEmpty()) {
+        delete authSessions.first();
+    }
     deleteLater();
 }
 

@@ -5,8 +5,16 @@ TEMPLATE = subdirs
 
 CONFIG  += ordered
 
-SUBDIRS += passwordplugintest/passwordplugintest.pro
-SUBDIRS += pluginproxytest/pluginproxytest.pro
-SUBDIRS += libsignon-qt-tests/libsignon-qt-tests.pro
-SUBDIRS += libsignon-qt-tests/libsignon-qt-untrusted-tests.pro
-SUBDIRS += signond-tests/signond-tests.pro
+SUBDIRS += \
+    passwordplugintest \
+    libsignon-qt-tests \
+    signond-tests \
+    extensions
+
+QMAKE_SUBSTITUTES += com.google.code.AccountsSSO.SingleSignOn.service.in
+
+# copy testsession.conf to the build directory
+system($$QMAKE_COPY testsession.conf.in $${TOP_BUILD_DIR}/tests/testsession.conf)
+
+QMAKE_DISTCLEAN += \
+    testsession.conf

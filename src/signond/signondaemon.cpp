@@ -2,6 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
+ * Copyright (C) 2013 Canonical Ltd.
  *
  * Contact: Aurel Popirtac <ext-aurel.popirtac@nokia.com>
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
@@ -37,6 +38,9 @@ extern "C" {
 #include <QPluginLoader>
 #include <QProcessEnvironment>
 #include <QSocketNotifier>
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+#include <QStandardPaths>
+#endif
 
 #include "SignOn/misc.h"
 
@@ -51,10 +55,10 @@ extern "C" {
 
 #define SIGNON_RETURN_IF_CAM_UNAVAILABLE(_ret_arg_) do {                   \
         if (m_pCAMManager && !m_pCAMManager->credentialsSystemOpened()) {  \
-            sendErrorReply(internalServerErrName,                          \
-                           internalServerErrStr +                          \
-                           QLatin1String("Could not access Signon "        \
-                                         "Database."));                    \
+            setLastError(internalServerErrName,                            \
+                         internalServerErrStr +                            \
+                         QLatin1String("Could not access Signon "          \
+                                       "Database."));                      \
             return _ret_arg_;           \
         }                               \
     } while(0)
@@ -102,10 +106,13 @@ SignonDaemonConfiguration::~SignonDaemonConfiguration()
  */
 void SignonDaemonConfiguration::load()
 {
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+
     //Daemon configuration file
 
     QSettings::setPath(QSettings::NativeFormat, QSettings::SystemScope,
-                       QLatin1String("/etc"));
+                       environment.value(QLatin1String("SSO_CONFIG_FILE_DIR"),
+                                         QLatin1String("/etc")));
 
     QSettings settings(QLatin1String("signond"));
 
@@ -166,7 +173,6 @@ void SignonDaemonConfiguration::load()
 
     //Environment variables
 
-    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     int value = 0;
     if (environment.contains(QLatin1String("SSO_DAEMON_TIMEOUT"))) {
         value = environment.value(
@@ -211,6 +217,26 @@ void SignonDaemonConfiguration::load()
         m_extensionsDir =
             environment.value(QLatin1String("SSO_EXTENSIONS_DIR"));
     }
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    QString runtimeDir =
+        QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+#else
+    QString runtimeDir = environment.value(QLatin1String("XDG_RUNTIME_DIR"));
+#endif
+    if (!runtimeDir.isEmpty()) {
+        QString socketFileName =
+            QString::fromLatin1("%1/" SIGNOND_SOCKET_FILENAME).arg(runtimeDir);
+        QDir socketDir = QFileInfo(socketFileName).absoluteDir();
+        if (!socketDir.exists() && !socketDir.mkpath(socketDir.path())) {
+            BLAME() << "Cannot create socket directory" << socketDir;
+        } else {
+            m_busAddress =
+                QString::fromLatin1("unix:path=%1").arg(socketFileName);
+        }
+    } else {
+        BLAME() << "XDG_RUNTIME_DIR unset, disabling p2p bus";
+    }
 }
 
 /* ---------------------- SignonDaemon ---------------------- */
@@ -222,8 +248,11 @@ static int sigFd[2];
 
 SignonDaemon *SignonDaemon::m_instance = NULL;
 
-SignonDaemon::SignonDaemon(QObject *parent) : QObject(parent)
-                                            , m_configuration(NULL)
+SignonDaemon::SignonDaemon(QObject *parent):
+    QObject(parent),
+    m_configuration(0),
+    m_pCAMManager(0),
+    m_dbusServer(0)
 {
     // Files created by signond must be unreadable by "other"
     umask(S_IROTH | S_IWOTH);
@@ -244,7 +273,6 @@ SignonDaemon::~SignonDaemon()
 
     SignonAuthSession::stopAllAuthSessions();
     m_storedIdentities.clear();
-    m_unstoredIdentities.clear();
 
     if (m_pCAMManager) {
         m_pCAMManager->closeCredentialsSystem();
@@ -428,6 +456,15 @@ void SignonDaemon::init()
     (void)new SignonDaemonAdaptor(this);
     registerOptions = QDBusConnection::ExportAdaptors;
 
+    // p2p connection
+#ifdef ENABLE_P2P
+    m_dbusServer = new QDBusServer(m_configuration->busAddress(), this);
+    QObject::connect(m_dbusServer,
+                     SIGNAL(newConnection(const QDBusConnection &)),
+                     this, SLOT(onNewConnection(const QDBusConnection &)));
+#endif
+
+    // session bus
     if (!connection.registerObject(SIGNOND_DAEMON_OBJECTPATH,
                                    this, registerOptions)) {
         TRACE() << "Object cannot be registered";
@@ -463,6 +500,16 @@ void SignonDaemon::init()
     TRACE() << "Signond SUCCESSFULLY initialized.";
 }
 
+void SignonDaemon::onNewConnection(const QDBusConnection &connection)
+{
+    TRACE() << "New p2p connection" << connection.name();
+    QDBusConnection conn(connection);
+    if (!conn.registerObject(SIGNOND_DAEMON_OBJECTPATH,
+                             this, QDBusConnection::ExportAdaptors)) {
+        qFatal("Failed to register SignonDaemon object");
+    }
+}
+
 void SignonDaemon::initExtensions()
 {
     /* Scan the directory containing signond extensions and attempt loading
@@ -471,7 +518,7 @@ void SignonDaemon::initExtensions()
     QDir dir(m_configuration->extensionsDir());
     QStringList filters(QLatin1String("lib*.so"));
     QStringList extensionList = dir.entryList(filters, QDir::Files);
-    foreach(QString filename, extensionList)
+    foreach(const QString &filename, extensionList)
         initExtension(dir.filePath(filename));
 }
 
@@ -481,20 +528,15 @@ void SignonDaemon::initExtension(const QString &filePath)
 
     QPluginLoader pluginLoader(filePath);
     QObject *plugin = pluginLoader.instance();
-    if (plugin == 0) {
+    if (!plugin) {
         qWarning() << "Couldn't load plugin:" << pluginLoader.errorString();
         return;
     }
 
     /* Check whether the extension implements some useful objects; if not,
      * unload it. */
-    bool extensionInUse = false;
-    if (m_pCAMManager->initExtension(plugin))
-        extensionInUse = true;
-
-    if (!extensionInUse) {
+    if (!m_pCAMManager->initExtension(plugin))
         pluginLoader.unload();
-    }
 }
 
 bool SignonDaemon::initStorage()
@@ -520,32 +562,42 @@ bool SignonDaemon::initStorage()
     return true;
 }
 
-void SignonDaemon::identityStored(SignonIdentity *identity)
+void SignonDaemon::onIdentityStored(SignonIdentity *identity)
 {
-    if (m_unstoredIdentities.contains(identity->objectName())) {
-        m_unstoredIdentities.remove(identity->objectName());
+    m_storedIdentities.insert(identity->id(), identity);
+}
+
+void SignonDaemon::onIdentityDestroyed()
+{
+    SignonIdentity *identity = qobject_cast<SignonIdentity*>(sender());
+    m_storedIdentities.remove(identity->id());
+}
+
+void SignonDaemon::watchIdentity(SignonIdentity *identity)
+{
+    QObject::connect(identity, SIGNAL(stored(SignonIdentity*)),
+                     this, SLOT(onIdentityStored(SignonIdentity*)));
+    QObject::connect(identity, SIGNAL(unregistered()),
+                     this, SLOT(onIdentityDestroyed()));
+
+    if (identity->id() != SIGNOND_NEW_IDENTITY) {
         m_storedIdentities.insert(identity->id(), identity);
     }
 }
 
-void SignonDaemon::registerNewIdentity(QDBusObjectPath &objectPath)
+QObject *SignonDaemon::registerNewIdentity()
 {
+    clearLastError();
+
     TRACE() << "Registering new identity:";
 
     SignonIdentity *identity =
         SignonIdentity::createIdentity(SIGNOND_NEW_IDENTITY, this);
 
-    if (identity == NULL) {
-        sendErrorReply(internalServerErrName,
-                       internalServerErrStr +
-                       QLatin1String("Could not create remote Identity "
-                                     "object."));
-        return;
-    }
+    Q_ASSERT(identity != NULL);
+    watchIdentity(identity);
 
-    m_unstoredIdentities.insert(identity->objectName(), identity);
-
-    objectPath = QDBusObjectPath(identity->objectName());
+    return identity;
 }
 
 int SignonDaemon::identityTimeout() const
@@ -562,11 +614,12 @@ int SignonDaemon::authSessionTimeout() const
                                      m_configuration->authSessionTimeout());
 }
 
-void SignonDaemon::getIdentity(const quint32 id,
-                               QDBusObjectPath &objectPath,
-                               QVariantMap &identityData)
+QObject *SignonDaemon::getIdentity(const quint32 id,
+                                   QVariantMap &identityData)
 {
-    SIGNON_RETURN_IF_CAM_UNAVAILABLE();
+    clearLastError();
+
+    SIGNON_RETURN_IF_CAM_UNAVAILABLE(0);
 
     TRACE() << "Registering identity:" << id;
 
@@ -576,34 +629,26 @@ void SignonDaemon::getIdentity(const quint32 id,
     //if not create it
     if (identity == NULL)
         identity = SignonIdentity::createIdentity(id, this);
-
-    if (identity == NULL)
-    {
-        sendErrorReply(internalServerErrName,
-                       internalServerErrStr +
-                       QLatin1String("Could not create remote Identity "
-                                     "object."));
-        return;
-    }
+    Q_ASSERT(identity != NULL);
 
     bool ok;
     SignonIdentityInfo info = identity->queryInfo(ok, false);
 
     if (info.isNew())
     {
-        sendErrorReply(SIGNOND_IDENTITY_NOT_FOUND_ERR_NAME,
-                       SIGNOND_IDENTITY_NOT_FOUND_ERR_STR);
-        return;
+        setLastError(SIGNOND_IDENTITY_NOT_FOUND_ERR_NAME,
+                     SIGNOND_IDENTITY_NOT_FOUND_ERR_STR);
+        identity->destroy();
+        return 0;
     }
 
-    //cache the identity as stored
-    m_storedIdentities.insert(identity->id(), identity);
+    watchIdentity(identity);
     identity->keepInUse();
 
     identityData = info.toMap();
 
     TRACE() << "DONE REGISTERING IDENTITY";
-    objectPath = QDBusObjectPath(identity->objectName());
+    return identity;
 }
 
 QStringList SignonDaemon::queryMethods()
@@ -630,22 +675,24 @@ QStringList SignonDaemon::queryMethods()
 
 QStringList SignonDaemon::queryMechanisms(const QString &method)
 {
-    TRACE() << "\n\n\n Querying mechanisms\n\n";
+    clearLastError();
+
+    TRACE() << method;
 
     QStringList mechs = SignonSessionCore::loadedPluginMethods(method);
 
-    if (mechs.size())
+    if (!mechs.isEmpty())
         return mechs;
 
     PluginProxy *plugin = PluginProxy::createNewPluginProxy(method);
 
     if (!plugin) {
         TRACE() << "Could not load plugin of type: " << method;
-        sendErrorReply(SIGNOND_METHOD_NOT_KNOWN_ERR_NAME,
-                       SIGNOND_METHOD_NOT_KNOWN_ERR_STR +
-                       QString::fromLatin1("Method %1 is not known or could "
-                                           "not load specific configuration.").
-                       arg(method));
+        setLastError(SIGNOND_METHOD_NOT_KNOWN_ERR_NAME,
+                     SIGNOND_METHOD_NOT_KNOWN_ERR_STR +
+                     QString::fromLatin1("Method %1 is not known or could "
+                                         "not load specific configuration.").
+                     arg(method));
         return QStringList();
     }
 
@@ -657,6 +704,8 @@ QStringList SignonDaemon::queryMechanisms(const QString &method)
 
 QList<QVariantMap> SignonDaemon::queryIdentities(const QVariantMap &filter)
 {
+    clearLastError();
+
     SIGNON_RETURN_IF_CAM_UNAVAILABLE(QList<QVariantMap>());
 
     TRACE() << "Querying identities";
@@ -677,14 +726,14 @@ QList<QVariantMap> SignonDaemon::queryIdentities(const QVariantMap &filter)
     QList<SignonIdentityInfo> credentials = db->credentials(filterLocal);
 
     if (db->errorOccurred()) {
-        sendErrorReply(internalServerErrName,
-                       internalServerErrStr +
-                       QLatin1String("Querying database error occurred."));
+        setLastError(internalServerErrName,
+                     internalServerErrStr +
+                     QLatin1String("Querying database error occurred."));
         return QList<QVariantMap>();
     }
 
     QList<QVariantMap> mapList;
-    foreach (SignonIdentityInfo info, credentials) {
+    foreach (const SignonIdentityInfo &info, credentials) {
         mapList.append(info.toMap());
     }
     return mapList;
@@ -692,6 +741,8 @@ QList<QVariantMap> SignonDaemon::queryIdentities(const QVariantMap &filter)
 
 bool SignonDaemon::clear()
 {
+    clearLastError();
+
     SIGNON_RETURN_IF_CAM_UNAVAILABLE(false);
 
     TRACE() << "\n\n\n Clearing DB\n\n";
@@ -702,29 +753,29 @@ bool SignonDaemon::clear()
     }
 
     if (!db->clear()) {
-        sendErrorReply(SIGNOND_INTERNAL_SERVER_ERR_NAME,
-                       SIGNOND_INTERNAL_SERVER_ERR_STR +
-                       QLatin1String("Database error occurred."));
+        setLastError(SIGNOND_INTERNAL_SERVER_ERR_NAME,
+                     SIGNOND_INTERNAL_SERVER_ERR_STR +
+                     QLatin1String("Database error occurred."));
         return false;
     }
     return true;
 }
 
-QString SignonDaemon::getAuthSessionObjectPath(const quint32 id,
-                                               const QString type)
+QObject *SignonDaemon::getAuthSession(const quint32 id,
+                                      const QString type,
+                                      pid_t ownerPid)
 {
-    bool supportsAuthMethod = false;
-    pid_t ownerPid = AccessControlManagerHelper::pidOfPeer(*this);
-    QString objectPath =
-        SignonAuthSession::getAuthSessionObjectPath(id, type, this,
-                                                    supportsAuthMethod,
-                                                    ownerPid);
-    if (objectPath.isEmpty() && !supportsAuthMethod) {
-        sendErrorReply(SIGNOND_METHOD_NOT_KNOWN_ERR_NAME,
-                       SIGNOND_METHOD_NOT_KNOWN_ERR_STR);
-        return QString();
+    clearLastError();
+
+    SignonAuthSession *authSession =
+        SignonAuthSession::createAuthSession(id, type, this, ownerPid);
+    if (authSession == NULL) {
+        setLastError(SIGNOND_METHOD_NOT_KNOWN_ERR_NAME,
+                     SIGNOND_METHOD_NOT_KNOWN_ERR_STR);
+        return 0;
     }
-    return objectPath;
+
+    return authSession;
 }
 
 void SignonDaemon::eraseBackupDir() const
@@ -758,7 +809,7 @@ bool SignonDaemon::copyToBackupDir(const QStringList &fileNames) const
 
     /* Now copy the files to be backed up */
     bool ok = true;
-    foreach (QString fileName, fileNames) {
+    foreach (const QString &fileName, fileNames) {
         /* Remove the target file, if it exists */
         if (target.exists(fileName))
             target.remove(fileName);
@@ -798,7 +849,7 @@ bool SignonDaemon::copyFromBackupDir(const QStringList &fileNames) const
     bool ok = true;
     QDir target(config.m_storagePath);
     QStringList movedFiles, copiedFiles;
-    foreach (QString fileName, fileNames) {
+    foreach (const QString &fileName, fileNames) {
         /* Remove the target file, if it exists */
         if (target.exists(fileName)) {
             if (target.rename(fileName, fileName + QLatin1String(".bak")))
@@ -827,18 +878,18 @@ bool SignonDaemon::copyFromBackupDir(const QStringList &fileNames) const
     if (!ok) {
         qWarning() << "Restore failed, recovering previous DB";
 
-        foreach (QString fileName, copiedFiles) {
+        foreach (const QString &fileName, copiedFiles) {
             target.remove(fileName);
         }
 
-        foreach (QString fileName, movedFiles) {
+        foreach (const QString &fileName, movedFiles) {
             if (!target.rename(fileName + QLatin1String(".bak"), fileName)) {
                 qCritical() << "Could not recover:" << fileName;
             }
         }
     } else {
         /* delete ".bak" files */
-        foreach (QString fileName, movedFiles) {
+        foreach (const QString &fileName, movedFiles) {
             target.remove(fileName + QLatin1String(".bak"));
         }
 
@@ -858,7 +909,7 @@ bool SignonDaemon::createStorageFileTree(const QStringList &backupFiles) const
         }
     }
 
-    foreach (QString fileName, backupFiles) {
+    foreach (const QString &fileName, backupFiles) {
         if (storageDir.exists(fileName)) continue;
 
         QString filePath = storageDir.path() + QDir::separator() + fileName;
@@ -993,6 +1044,18 @@ void SignonDaemon::onDisconnected()
     QMetaObject::invokeMethod(QCoreApplication::instance(),
                               "quit",
                               Qt::QueuedConnection);
+}
+
+void SignonDaemon::setLastError(const QString &name, const QString &msg)
+{
+    m_lastErrorName = name;
+    m_lastErrorMessage = msg;
+}
+
+void SignonDaemon::clearLastError()
+{
+    m_lastErrorName = QString();
+    m_lastErrorMessage = QString();
 }
 
 } //namespace SignonDaemonNS

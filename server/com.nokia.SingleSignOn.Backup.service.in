@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=com.nokia.SingleSignOn.Backup
+Exec=$$INSTALL_PREFIX/bin/signond -backup

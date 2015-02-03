@@ -21,16 +21,29 @@
  */
 
 #include "dbusinterface.h"
+#include "libsignoncommon.h"
+
+#include <climits>
 
 using namespace SignOn;
+
+static bool connIsP2P(const QDBusConnection &connection)
+{
+    return connection.name().startsWith(QLatin1String("libsignon-qt"));
+}
 
 DBusInterface::DBusInterface(const QString &service,
                              const QString &path,
                              const char *interface,
                              const QDBusConnection &connection,
                              QObject *parent):
-    QDBusAbstractInterface(service, path, interface, connection, parent)
+    /* Use empty service name for p2p connections. This is a workaround for
+     * https://bugreports.qt-project.org/browse/QTBUG-32374
+     */
+    QDBusAbstractInterface(connIsP2P(connection) ? QLatin1String("") : service,
+                           path, interface, connection, parent)
 {
+    setTimeout(INT_MAX);
 }
 
 DBusInterface::~DBusInterface()

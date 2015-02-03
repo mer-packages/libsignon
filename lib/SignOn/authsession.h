@@ -38,6 +38,9 @@
 #include "sessiondata.h"
 #include "signonerror.h"
 
+namespace SignOnTests {
+    class AccessControlTest;
+};
 
 namespace SignOn {
 
@@ -55,6 +58,7 @@ class SIGNON_EXPORT AuthSession: public QObject
 
     friend class IdentityImpl;
     friend class AuthSessionImpl;
+    friend class SignOnTests::AccessControlTest;
 
 public:
     /*!

@@ -2,6 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
+ * Copyright (C) 2013 Canonical Ltd.
  *
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
  *
@@ -75,6 +76,17 @@ void SignonUiAdaptor::cancelUiRequest(const QString &requestId)
     argumentList << requestId;
     callWithArgumentList(QDBus::NoBlock, QLatin1String("cancelUiRequest"),
                          argumentList);
+}
+
+/*
+ * Remove any data associated with the given identity.
+ * */
+QDBusPendingCall SignonUiAdaptor::removeIdentityData(quint32 id)
+{
+    QList<QVariant> argumentList;
+    argumentList << id;
+    return asyncCallWithArgumentList(QLatin1String("removeIdentityData"),
+                                     argumentList);
 }
 
 QDBusPendingCall

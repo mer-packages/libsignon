@@ -2,6 +2,7 @@
  * This file is part of signon
  *
  * Copyright (C) 2009-2010 Nokia Corporation.
+ * Copyright (C) 2013 Canonical Ltd.
  *
  * Contact: Aurel Popirtac <ext-aurel.popirtac@nokia.com>
  * Contact: Alberto Mardegan <alberto.mardegan@canonical.com>
@@ -33,10 +34,10 @@
 #include <QQueue>
 #include <QDBusObjectPath>
 
+#include "async-dbus-proxy.h"
 #include "libsignoncommon.h"
 #include "identity.h"
 #include "dbusinterface.h"
-#include "dbusoperationqueuehandler.h"
 
 namespace SignOn {
 
@@ -54,16 +55,18 @@ class IdentityImpl: public QObject
 
     friend class Identity;
 
+public:
     enum State {
         PendingRegistration = 0, /* Ongoing registration */
         NeedsRegistration,       /* Remote object not created or destroyed */
         NeedsUpdate,             /* Remote data changed */
+        PendingUpdate,           /* Update in progress */
         Removed,                 /* Removed from database */
-        Ready                    /* Ready for querying locally cached data, or
+        Ready,                   /* Ready for querying locally cached data, or
                                     any remote operation */
+        LastState
     };
 
-public:
     IdentityImpl(Identity *parent,
                  const quint32 id = 0);
     ~IdentityImpl();
@@ -74,18 +77,19 @@ public:
 
 public Q_SLOTS:
     void errorReply(const QDBusError &err);
-    void storeCredentialsReply(const quint32 id);
+    void storeCredentialsReply(QDBusPendingCallWatcher *call);
     void removeReply();
     void addReferenceReply();
     void removeReferenceReply();
-    void getInfoReply(const QVariantMap &infoData);
-    void verifyUserReply(const bool valid);
-    void verifySecretReply(const bool valid);
+    void getInfoReply(QDBusPendingCallWatcher *call);
+    void verifyUserReply(QDBusPendingCallWatcher *call);
+    void verifySecretReply(QDBusPendingCallWatcher *call);
     void signOutReply();
     void infoUpdated(int);
-    void removeObjectDestroyed();
+    void remoteObjectDestroyed();
 
 private Q_SLOTS:
+    bool sendRegisterRequest();
     void queryAvailableMethods();
     void requestCredentialsUpdate(const QString &message = QString());
     void storeCredentials(const IdentityInfo &info);
@@ -98,18 +102,14 @@ private Q_SLOTS:
     void verifySecret(const QString &secret);
     void signOut();
     void authSessionCancelReply(const SignOn::Error &err);
-    void registerReply(const QDBusObjectPath &objectPath,
-                       const QVariantMap &infoData);
-    void registerReply(const QDBusObjectPath &objectPath);
+    void registerReply(QDBusPendingCallWatcher *call);
+    void deleteServiceProxy();
 
 private:
     void copyInfo(const IdentityInfo &info);
-    bool sendRequest(const char *remoteMethod, const QList<QVariant> &args,
-                     const char *replySlot, int timeout = -1);
     void updateState(State state);
-    void checkConnection();
+    bool checkRemoved();
 
-    bool sendRegisterRequest();
     void updateContents();
     void updateCachedData(const QVariantMap &infoData);
     void clearAuthSessionsCache();
@@ -117,20 +117,22 @@ private:
 private:
     Identity *m_parent;
     IdentityInfo *m_identityInfo;
-    DBusOperationQueueHandler m_operationQueueHandler;
+    SignondAsyncDBusProxy m_dbusProxy;
 
     /* Cache info in the storing case, so that if the storing succeeds, server
      * side does not have to send succesfully stored data over IPC channel.
      */
     IdentityInfo *m_tmpIdentityInfo;
-    DBusInterface *m_DBusInterface;
     State m_state;
     QList<AuthSession *> m_authSessions;
-    /* This flag allows the queryInfo() reply slot not to reply with the
-     * 'info()' signal, but with the 'methodsAvailable()' signal, for the case
-     * when the cached info is updated at a queryAvaialbleMethods() request.
-     */
+
+    /* This flag tells the queryInfo() reply slot to emit the info() signal */
     bool m_infoQueried;
+
+    /* This flag tells the queryInfo() reply slot to emit the
+     * methodsAvailable() signal */
+    bool m_methodsQueried;
+
     /* Marks this Identity as the one which requested the sign out */
     bool m_signOutRequestedByThisIdentity;
 };
