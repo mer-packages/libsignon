@@ -30,6 +30,7 @@
 #include <QDebug>
 #include <QMetaMethod>
 #include <QMetaType>
+#include <QPointer>
 
 #include "connection-manager.h"
 #include "dbusinterface.h"
@@ -117,12 +118,16 @@ void PendingCall::onFinished(QDBusPendingCallWatcher *watcher)
         }
     }
 
+    QPointer<PendingCall> thisguard(this);
+    QPointer<QDBusPendingCallWatcher> watcherguard(watcher);
     if (watcher->isError()) {
         Q_EMIT error(watcher->error());
     } else {
         Q_EMIT success(watcher);
     }
-    Q_EMIT finished(watcher);
+    if (thisguard) {
+        Q_EMIT finished(watcherguard ? watcher : 0);
+    }
 }
 
 void PendingCall::onInterfaceDestroyed()
