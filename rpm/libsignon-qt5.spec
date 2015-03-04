@@ -172,7 +172,7 @@ This package contains tests for signon
 chmod +x tests/create-tests-definition.sh
 
 %build
-%qmake5 TESTDIR=/opt/tests/signon CONFIG+=install_tests
+%qmake5 TESTDIR=/opt/tests/signon CONFIG+=install_tests CONFIG+=enable-p2p
 make %{?_smp_mflags}
 
 
