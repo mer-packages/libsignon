@@ -1,6 +1,6 @@
 Name: signon-qt5
 Version: 8.57
-Release: 3
+Release: 4
 Summary: Single Sign On framework
 Group: System/Libraries
 License: LGPLv2.1
