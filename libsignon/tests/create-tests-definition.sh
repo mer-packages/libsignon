@@ -134,7 +134,7 @@ cat <<END
 
   </suite>
 
-  <suite name="signond-extensions" domain"Accounts and SSO">
+  <suite name="signond-extensions" domain="Accounts and SSO">
 
 `generate_test_set extensions/tst_access_control_manager \
     "SSO CORE" "FIXME" "FIXME" "single-case"`
