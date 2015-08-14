@@ -4,7 +4,7 @@ Release: 4
 Summary: Single Sign On framework
 Group: System/Libraries
 License: LGPLv2.1
-URL: https://code.google.com/p/accounts-sso.signond/
+URL: https://gitlab.com/accounts-sso/signond
 Source0: %{name}-%{version}.tar.bz2
 BuildRequires: doxygen
 BuildRequires: pkgconfig(Qt5Core)
