@@ -25,6 +25,7 @@
 
 #include <QDBusArgument>
 #include <QBuffer>
+#include <QDataStream>
 #include <QDebug>
 
 #include "SignOn/signonplugincommon.h"
