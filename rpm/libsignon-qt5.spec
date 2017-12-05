@@ -14,7 +14,7 @@ BuildRequires: pkgconfig(Qt5Network)
 BuildRequires: pkgconfig(Qt5Gui)
 BuildRequires: pkgconfig(Qt5Test)
 BuildRequires: pkgconfig(dbus-1)
-BuildRequires: pkgconfig(libcryptsetup)
+BuildRequires: pkgconfig(libcryptsetup) >= 1.4.0
 BuildRequires: pkgconfig(accounts-qt5)
 BuildRequires: pkgconfig(libproxy-1.0)
 BuildRequires: pkgconfig(qt5-boostable)
